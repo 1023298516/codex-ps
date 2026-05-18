@@ -1,0 +1,130 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: #15171a;
+  color: #e5e7eb;
+  font: 12px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+.panel {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto auto;
+  background: #202327;
+  border: 1px solid #30343a;
+}
+
+.topbar {
+  height: 42px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #30343a;
+}
+
+.topbar span {
+  display: block;
+  margin-top: 2px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.topbar button,
+.composer button,
+.quick-actions button,
+.mode-switch button {
+  border: 1px solid #454b55;
+  border-radius: 8px;
+  background: #30343a;
+  color: #e5e7eb;
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.mode-switch {
+  padding: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  border-bottom: 1px solid #30343a;
+}
+
+.mode-switch button.active {
+  background: #0f766e;
+  border-color: #14b8a6;
+  color: #ffffff;
+}
+
+.log {
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.event {
+  margin-bottom: 8px;
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: #24282e;
+  border: 1px solid #343a44;
+  line-height: 1.45;
+}
+
+.event.user {
+  background: #303743;
+}
+
+.event.tool_event {
+  border-color: rgba(245, 158, 11, 0.34);
+  background: rgba(245, 158, 11, 0.08);
+  color: #fde68a;
+}
+
+.event.error {
+  border-color: rgba(248, 113, 113, 0.38);
+  background: rgba(248, 113, 113, 0.08);
+  color: #fecaca;
+}
+
+.quick-actions {
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  border-top: 1px solid #30343a;
+}
+
+.composer {
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  border-top: 1px solid #30343a;
+  background: #1d2024;
+}
+
+textarea {
+  width: 100%;
+  resize: none;
+  border: 1px solid #3a3f46;
+  background: #15171a;
+  color: #f8fafc;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.composer button {
+  background: #0f766e;
+  border-color: #14b8a6;
+  color: #ffffff;
+  font-weight: 700;
+}

@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Codex PS</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="panel">
+      <header class="topbar">
+        <div>
+          <strong>Codex PS</strong>
+          <span id="connection">Disconnected</span>
+        </div>
+        <button id="interrupt" title="Stop current run">Stop</button>
+      </header>
+
+      <section class="mode-switch" aria-label="Execution mode">
+        <button data-mode="safe-auto" class="active">B 安全自动</button>
+        <button data-mode="full-auto">C 全自动</button>
+      </section>
+
+      <section id="log" class="log" aria-live="polite"></section>
+
+      <section class="quick-actions">
+        <button id="import-latest">导入最新图</button>
+        <button id="read-canvas">读取画布</button>
+        <button id="read-layers">读取图层</button>
+      </section>
+
+      <form id="composer" class="composer">
+        <textarea id="message" rows="3" placeholder="描述你要生成、导入或修改的画面..."></textarea>
+        <button type="submit">发送</button>
+      </form>
+    </main>
+    <script type="module" src="./panel.js"></script>
+  </body>
+</html>
