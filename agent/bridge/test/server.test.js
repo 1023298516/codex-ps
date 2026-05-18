@@ -37,6 +37,23 @@ function waitForSocketEvent(socket, predicate) {
   });
 }
 
+function nextSocketEvent(socket, timeoutMs = 50) {
+  return new Promise(resolve => {
+    const timeout = setTimeout(() => {
+      socket.off('message', onMessage);
+      resolve(null);
+    }, timeoutMs);
+
+    function onMessage(data) {
+      clearTimeout(timeout);
+      socket.off('message', onMessage);
+      resolve(JSON.parse(data.toString('utf8')));
+    }
+
+    socket.on('message', onMessage);
+  });
+}
+
 test('GET /health returns bridge status', async () => {
   const server = createBridgeServer({ appServer: { startTurn: async () => ({}) } });
   const listener = await server.listen(0);
@@ -248,6 +265,81 @@ test('turn completion opens the generated image when Photoshop has no active doc
   } finally {
     await server.close();
     await rm(imageDir, { recursive: true, force: true });
+  }
+});
+
+test('direct latest-image import opens the image when Photoshop has no active document', async () => {
+  const imageDir = await mkdtemp(join(tmpdir(), 'codex-ps-generated-'));
+  const calls = [];
+  const server = createBridgeServer({
+    appServer: {
+      async startTurn() {
+        return { turn: { id: 'turn-1' } };
+      },
+      async callMcpTool(serverName, tool, args) {
+        calls.push({ server: serverName, tool, args });
+        if (tool === 'photoshop_place_image') {
+          return { isError: true, content: [{ type: 'text', text: 'Error placing image: No active document' }] };
+        }
+        return { content: [{ type: 'text', text: `${tool}: ok` }] };
+      }
+    },
+    codexImageDir: imageDir
+  });
+  const listener = await server.listen(0);
+  try {
+    const imagePath = join(imageDir, 'latest.png');
+    await writeFile(imagePath, 'fake png', 'utf8');
+    const port = listener.address().port;
+    const response = await fetch(`http://127.0.0.1:${port}/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: '导入最新 Codex 图片到当前 Photoshop 画布，作为智能对象。', mode: 'safe-auto' })
+    });
+    assert.equal(response.status, 200);
+
+    assert.deepEqual(calls, [{
+      server: 'photoshop',
+      tool: 'photoshop_place_image',
+      args: {
+        filePath: imagePath,
+        x: 0,
+        y: 0
+      }
+    }, {
+      server: 'photoshop',
+      tool: 'photoshop_open_image',
+      args: {
+        filePath: imagePath
+      }
+    }]);
+  } finally {
+    await server.close();
+    await rm(imageDir, { recursive: true, force: true });
+  }
+});
+
+test('raw app-server notifications are not forwarded to the panel', async () => {
+  const server = createBridgeServer({
+    appServer: {
+      async startTurn() {
+        return { turn: { id: 'turn-1' } };
+      }
+    }
+  });
+  const listener = await server.listen(0);
+  const socket = new WebSocket(`ws://127.0.0.1:${listener.address().port}/socket`);
+  try {
+    const statusPromise = waitForSocketEvent(socket, event => event.type === 'status');
+    await once(socket, 'open');
+    await statusPromise;
+
+    await server.handleAppServerNotification({ method: 'custom/event', params: { value: 1 } });
+    const event = await nextSocketEvent(socket);
+    assert.equal(event, null);
+  } finally {
+    socket.close();
+    await server.close();
   }
 });
 

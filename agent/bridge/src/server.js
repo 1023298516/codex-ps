@@ -3,7 +3,7 @@ import { WebSocketServer } from 'ws';
 import { normalizeAppServerNotification, panelEvent, serializeSse } from './events.js';
 import { normalizeMode } from './policy.js';
 import { createPhotoshopTools } from './photoshop-tools.js';
-import { waitForLatestCodexImage } from './codex-images.js';
+import { latestCodexImage, waitForLatestCodexImage } from './codex-images.js';
 
 async function readJson(req) {
   const chunks = [];
@@ -63,8 +63,6 @@ async function runDirectIntent(tools, intent) {
       return tools.readDocument();
     case 'read_layers':
       return tools.readLayers();
-    case 'place_latest_codex_image':
-      return tools.placeLatestCodexImage({ fitMode: 'fit' });
     default:
       throw new Error(`Unknown direct Photoshop action: ${intent.action}`);
   }
@@ -94,6 +92,50 @@ export function createBridgeServer({
     if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(event));
   }
 
+  async function placeCodexImageFile({ image, mode, source }) {
+    const generated = source === 'generated';
+    const actionName = generated ? 'place_generated_codex_image' : 'place_latest_codex_image';
+    const tools = createPhotoshopTools({ appServer, mode });
+
+    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: actionName, status: 'started' }));
+    const placeResult = await tools.placeImage({ filePath: image.path });
+
+    if (toolResultMentions(placeResult, /No active document/i)) {
+      const openResult = await tools.openImage({ filePath: image.path });
+      const text = [
+        generated
+          ? 'Codex 图片已生成，当前没有打开画布，已作为新文档打开'
+          : '已找到最新 Codex 图片，当前没有打开画布，已作为新文档打开',
+        `imagePath: ${image.path}`,
+        textFromToolResult(openResult)
+      ].join('\n');
+      await store?.appendOperation?.({ type: 'tool_event', tool: `open_${actionName}`, result: text });
+      broadcast(panelEvent('assistant_delta', { text }));
+      return;
+    }
+
+    if (placeResult?.isError) {
+      const text = [
+        generated ? 'Codex 图片已生成，但导入 Photoshop 时失败' : '最新 Codex 图片导入 Photoshop 时失败',
+        `imagePath: ${image.path}`,
+        textFromToolResult(placeResult)
+      ].join('\n');
+      await store?.appendOperation?.({ type: 'tool_event', tool: actionName, result: text });
+      broadcast(panelEvent('error', { message: text, details: placeResult }));
+      return;
+    }
+
+    const fitResult = await tools.fitActiveLayerToDocument({ fillDocument: false });
+    const text = [
+      generated ? 'Codex 图片已导入 Photoshop' : '最新 Codex 图片已导入 Photoshop',
+      `imagePath: ${image.path}`,
+      textFromToolResult(placeResult),
+      textFromToolResult(fitResult)
+    ].join('\n');
+    await store?.appendOperation?.({ type: 'tool_event', tool: actionName, result: text });
+    broadcast(panelEvent('assistant_delta', { text }));
+  }
+
   async function placeGeneratedCodexImage(request) {
     const image = await waitForLatestCodexImage({
       searchDir: codexImageDir,
@@ -107,42 +149,19 @@ export function createBridgeServer({
       return;
     }
 
-    const tools = createPhotoshopTools({ appServer, mode: request.mode });
-    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'place_generated_codex_image', status: 'started' }));
-    const placeResult = await tools.placeImage({ filePath: image.path });
+    await placeCodexImageFile({ image, mode: request.mode, source: 'generated' });
+  }
 
-    if (toolResultMentions(placeResult, /No active document/i)) {
-      const openResult = await tools.openImage({ filePath: image.path });
-      const text = [
-        'Codex 图片已生成，当前没有打开画布，已作为新文档打开',
-        `imagePath: ${image.path}`,
-        textFromToolResult(openResult)
-      ].join('\n');
-      await store?.appendOperation?.({ type: 'tool_event', tool: 'open_generated_codex_image', result: text });
-      broadcast(panelEvent('assistant_delta', { text }));
+  async function placeLatestCodexImage(mode) {
+    const image = await latestCodexImage({ searchDir: codexImageDir });
+    if (!image) {
+      broadcast(panelEvent('error', {
+        message: '没有找到可导入的 Codex 图片。可以先在面板里生成一张。'
+      }));
       return;
     }
 
-    if (placeResult?.isError) {
-      const text = [
-        'Codex 图片已生成，但导入 Photoshop 时失败',
-        `imagePath: ${image.path}`,
-        textFromToolResult(placeResult)
-      ].join('\n');
-      await store?.appendOperation?.({ type: 'tool_event', tool: 'place_generated_codex_image', result: text });
-      broadcast(panelEvent('error', { message: text, details: placeResult }));
-      return;
-    }
-
-    const fitResult = await tools.fitActiveLayerToDocument({ fillDocument: false });
-    const text = [
-      'Codex 图片已导入 Photoshop',
-      `imagePath: ${image.path}`,
-      textFromToolResult(placeResult),
-      textFromToolResult(fitResult)
-    ].join('\n');
-    await store?.appendOperation?.({ type: 'tool_event', tool: 'place_generated_codex_image', result: text });
-    broadcast(panelEvent('assistant_delta', { text }));
+    await placeCodexImageFile({ image, mode, source: 'latest' });
   }
 
   async function handlePanelChat(body) {
@@ -157,6 +176,11 @@ export function createBridgeServer({
         broadcast(panelEvent('tool_event', { server: 'codex', tool: 'image_generation', status: 'started' }));
         await appServer.startTurn(codexImageGenerationPrompt(directIntent.prompt));
         if (appServer.threadId) await store?.update?.({ threadId: appServer.threadId });
+        return;
+      }
+
+      if (directIntent.action === 'place_latest_codex_image') {
+        await placeLatestCodexImage(mode);
         return;
       }
 
@@ -182,7 +206,8 @@ export function createBridgeServer({
   async function handleAppServerNotification(notification) {
     // Keep the normal Codex chat stream visible, then run Photoshop side effects
     // after Codex's own image generation turn has finished writing files.
-    broadcast(normalizeAppServerNotification(notification));
+    const event = normalizeAppServerNotification(notification);
+    if (event.type !== 'raw_event') broadcast(event);
 
     if (notification?.method !== 'turn/completed' || pendingCodexImageImports.length === 0) return;
     const request = pendingCodexImageImports.shift();
