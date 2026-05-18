@@ -28,14 +28,26 @@ export function createPhotoshopTools({ appServer, mode = 'safe-auto', protection
       });
     },
 
-    async generateAndPlaceImage(args = {}) {
-      allowed('generate_and_place_image');
-      return appServer.callMcpTool(PHOTOSHOP_SERVER, 'photoshop_ai_generate_and_place', {
-        prompt: args.prompt,
-        fitMode: args.fitMode || 'fit',
-        layerName: args.layerName || 'AI Generated Image',
-        size: args.size || '1024x1024',
-        quality: args.quality || 'auto'
+    async placeImage(args = {}) {
+      allowed('place_image');
+      return appServer.callMcpTool(PHOTOSHOP_SERVER, 'photoshop_place_image', {
+        filePath: args.filePath,
+        x: args.x || 0,
+        y: args.y || 0
+      });
+    },
+
+    async openImage(args = {}) {
+      allowed('open_image');
+      return appServer.callMcpTool(PHOTOSHOP_SERVER, 'photoshop_open_image', {
+        filePath: args.filePath
+      });
+    },
+
+    async fitActiveLayerToDocument(args = {}) {
+      allowed('fit_layer_to_document');
+      return appServer.callMcpTool(PHOTOSHOP_SERVER, 'photoshop_fit_layer_to_document', {
+        fillDocument: args.fillDocument === true
       });
     },
 

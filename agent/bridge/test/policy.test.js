@@ -15,6 +15,9 @@ test('safe-auto allows reads and safe layer creation/transforms', () => {
   assert.equal(canRunAction('safe-auto', 'create_new_layer').allowed, true);
   assert.equal(canRunAction('safe-auto', 'transform_new_or_selected_layer').allowed, true);
   assert.equal(canRunAction('safe-auto', 'generate_and_place_image').allowed, true);
+  assert.equal(canRunAction('safe-auto', 'open_image').allowed, true);
+  assert.equal(canRunAction('safe-auto', 'place_image').allowed, true);
+  assert.equal(canRunAction('safe-auto', 'fit_layer_to_document').allowed, true);
 });
 
 test('safe-auto blocks destructive operations', () => {

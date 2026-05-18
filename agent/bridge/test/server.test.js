@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import WebSocket from 'ws';
 import { once } from 'node:events';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createBridgeServer } from '../src/server.js';
 
 function waitForSocketEvent(socket, predicate) {
@@ -105,16 +108,21 @@ test('POST /chat persists the active Codex thread id', async () => {
   }
 });
 
-test('POST /chat routes image generation requests to Photoshop MCP', async () => {
-  const calls = [];
+test('POST /chat routes image generation requests to Codex built-in image generation', async () => {
+  const turns = [];
+  const mcpCalls = [];
   const server = createBridgeServer({
     appServer: {
-      async startTurn() {
-        throw new Error('startTurn should not be called for direct image generation');
+      get threadId() {
+        return 'thread-1';
+      },
+      async startTurn(message) {
+        turns.push(message);
+        return { turn: { id: 'turn-1' } };
       },
       async callMcpTool(serverName, tool, args) {
-        calls.push({ server: serverName, tool, args });
-        return { content: [{ type: 'text', text: 'OpenAI image generated and placed' }] };
+        mcpCalls.push({ server: serverName, tool, args });
+        return { content: [{ type: 'text', text: 'ok' }] };
       }
     }
   });
@@ -127,19 +135,119 @@ test('POST /chat routes image generation requests to Photoshop MCP', async () =>
       body: JSON.stringify({ message: '生成一只猪', mode: 'safe-auto' })
     });
     assert.equal(response.status, 200);
-    assert.deepEqual(calls[0], {
-      server: 'photoshop',
-      tool: 'photoshop_ai_generate_and_place',
-      args: {
-        prompt: '生成一只猪',
-        fitMode: 'fit',
-        layerName: 'AI Generated Image',
-        size: '1024x1024',
-        quality: 'auto'
-      }
-    });
+    assert.equal(turns.length, 1);
+    assert.match(turns[0], /内置图片生成能力/);
+    assert.match(turns[0], /生成一只猪/);
+    assert.deepEqual(mcpCalls, []);
   } finally {
     await server.close();
+  }
+});
+
+test('turn completion places the newly generated Codex image into Photoshop', async () => {
+  const imageDir = await mkdtemp(join(tmpdir(), 'codex-ps-generated-'));
+  const calls = [];
+  const server = createBridgeServer({
+    appServer: {
+      async startTurn() {
+        return { turn: { id: 'turn-1' } };
+      },
+      async callMcpTool(serverName, tool, args) {
+        calls.push({ server: serverName, tool, args });
+        return { content: [{ type: 'text', text: `${tool}: ok` }] };
+      }
+    },
+    codexImageDir: imageDir,
+    imageWaitTimeoutMs: 100
+  });
+  const listener = await server.listen(0);
+  try {
+    const port = listener.address().port;
+    const response = await fetch(`http://127.0.0.1:${port}/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: '生成一只猪', mode: 'safe-auto' })
+    });
+    assert.equal(response.status, 200);
+
+    const threadDir = join(imageDir, 'thread');
+    await mkdir(threadDir);
+    const imagePath = join(threadDir, 'pig.png');
+    await writeFile(imagePath, 'fake png', 'utf8');
+    await server.handleAppServerNotification({ method: 'turn/completed', params: {} });
+
+    assert.deepEqual(calls, [{
+      server: 'photoshop',
+      tool: 'photoshop_place_image',
+      args: {
+        filePath: imagePath,
+        x: 0,
+        y: 0
+      }
+    }, {
+      server: 'photoshop',
+      tool: 'photoshop_fit_layer_to_document',
+      args: { fillDocument: false }
+    }]);
+  } finally {
+    await server.close();
+    await rm(imageDir, { recursive: true, force: true });
+  }
+});
+
+test('turn completion opens the generated image when Photoshop has no active document', async () => {
+  const imageDir = await mkdtemp(join(tmpdir(), 'codex-ps-generated-'));
+  const calls = [];
+  const server = createBridgeServer({
+    appServer: {
+      async startTurn() {
+        return { turn: { id: 'turn-1' } };
+      },
+      async callMcpTool(serverName, tool, args) {
+        calls.push({ server: serverName, tool, args });
+        if (tool === 'photoshop_place_image') {
+          return { isError: true, content: [{ type: 'text', text: 'Error placing image: No active document' }] };
+        }
+        return { content: [{ type: 'text', text: `${tool}: ok` }] };
+      }
+    },
+    codexImageDir: imageDir,
+    imageWaitTimeoutMs: 100
+  });
+  const listener = await server.listen(0);
+  try {
+    const port = listener.address().port;
+    const response = await fetch(`http://127.0.0.1:${port}/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: '生成一张香水图', mode: 'safe-auto' })
+    });
+    assert.equal(response.status, 200);
+
+    const threadDir = join(imageDir, 'thread');
+    await mkdir(threadDir);
+    const imagePath = join(threadDir, 'perfume.png');
+    await writeFile(imagePath, 'fake png', 'utf8');
+    await server.handleAppServerNotification({ method: 'turn/completed', params: {} });
+
+    assert.deepEqual(calls, [{
+      server: 'photoshop',
+      tool: 'photoshop_place_image',
+      args: {
+        filePath: imagePath,
+        x: 0,
+        y: 0
+      }
+    }, {
+      server: 'photoshop',
+      tool: 'photoshop_open_image',
+      args: {
+        filePath: imagePath
+      }
+    }]);
+  } finally {
+    await server.close();
+    await rm(imageDir, { recursive: true, force: true });
   }
 });
 

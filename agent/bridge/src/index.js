@@ -5,7 +5,6 @@ import { createStore } from './store.js';
 import { createBridgeServer } from './server.js';
 import { createJsonRpcClient } from './json-rpc-client.js';
 import { createAppServerAdapter } from './app-server-adapter.js';
-import { normalizeAppServerNotification } from './events.js';
 import { loadEnvFile } from './env.js';
 
 const port = Number(process.env.CODEX_PS_BRIDGE_PORT || 17891);
@@ -27,7 +26,7 @@ const appServer = createAppServerAdapter({ client, threadId: state.threadId });
 const server = createBridgeServer({ appServer, store });
 
 client.on('notification', notification => {
-  server.broadcast(normalizeAppServerNotification(notification));
+  void server.handleAppServerNotification(notification);
 });
 
 await server.listen(port);

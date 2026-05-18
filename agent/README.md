@@ -24,13 +24,7 @@ npm run dev:bridge
 
 The bridge listens on `http://127.0.0.1:17891` by default.
 
-Image generation through Photoshop MCP requires an OpenAI API key. Put it in a local, git-ignored file:
-
-```bash
-OPENAI_API_KEY=sk-...
-```
-
-Save that as `.env.local` in the project root before starting the bridge.
+Panel prompts like "生成一只猪" use Codex's built-in image generation, then import the newly generated image from `~/.codex/generated_images` into Photoshop. A local `.env.local` file is only needed if you deliberately call Photoshop MCP's separate OpenAI Image API tools.
 
 ## Safety Model
 

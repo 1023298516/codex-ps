@@ -24,20 +24,42 @@ test('safe-auto imports latest Codex image through Photoshop MCP', async () => {
   });
 });
 
-test('safe-auto generates and places an image through Photoshop MCP', async () => {
+test('safe-auto places a specific image through Photoshop MCP', async () => {
   const appServer = fakeAppServer();
   const tools = createPhotoshopTools({ appServer, mode: 'safe-auto' });
-  await tools.generateAndPlaceImage({ prompt: '生成一只猪', fitMode: 'fit' });
+  await tools.placeImage({ filePath: '/tmp/pig.png' });
   assert.deepEqual(appServer.calls[0], {
     server: 'photoshop',
-    tool: 'photoshop_ai_generate_and_place',
+    tool: 'photoshop_place_image',
     args: {
-      prompt: '生成一只猪',
-      fitMode: 'fit',
-      layerName: 'AI Generated Image',
-      size: '1024x1024',
-      quality: 'auto'
+      filePath: '/tmp/pig.png',
+      x: 0,
+      y: 0
     }
+  });
+});
+
+test('safe-auto opens a generated image as a Photoshop document', async () => {
+  const appServer = fakeAppServer();
+  const tools = createPhotoshopTools({ appServer, mode: 'safe-auto' });
+  await tools.openImage({ filePath: '/tmp/pig.png' });
+  assert.deepEqual(appServer.calls[0], {
+    server: 'photoshop',
+    tool: 'photoshop_open_image',
+    args: {
+      filePath: '/tmp/pig.png'
+    }
+  });
+});
+
+test('safe-auto fits the active layer to the document through Photoshop MCP', async () => {
+  const appServer = fakeAppServer();
+  const tools = createPhotoshopTools({ appServer, mode: 'safe-auto' });
+  await tools.fitActiveLayerToDocument();
+  assert.deepEqual(appServer.calls[0], {
+    server: 'photoshop',
+    tool: 'photoshop_fit_layer_to_document',
+    args: { fillDocument: false }
   });
 });
 

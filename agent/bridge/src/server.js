@@ -1,8 +1,9 @@
 import http from 'node:http';
 import { WebSocketServer } from 'ws';
-import { panelEvent, serializeSse } from './events.js';
+import { normalizeAppServerNotification, panelEvent, serializeSse } from './events.js';
 import { normalizeMode } from './policy.js';
 import { createPhotoshopTools } from './photoshop-tools.js';
+import { waitForLatestCodexImage } from './codex-images.js';
 
 async function readJson(req) {
   const chunks = [];
@@ -32,6 +33,10 @@ function textFromToolResult(result) {
   return JSON.stringify(result);
 }
 
+function toolResultMentions(result, pattern) {
+  return pattern.test(textFromToolResult(result));
+}
+
 function directIntentForMessage(message = '') {
   const text = String(message).trim();
   if (/读取.*(画布|文档信息|文档)|读.*(画布|文档信息|文档)/.test(text)) return { action: 'read_document' };
@@ -44,6 +49,14 @@ function directIntentForMessage(message = '') {
   return null;
 }
 
+function codexImageGenerationPrompt(prompt) {
+  return [
+    '请使用 Codex 内置图片生成能力生成一张图片。',
+    `图片需求：${prompt}`,
+    '只生成图片，不要调用 Photoshop MCP，也不要调用 OpenAI API Key。'
+  ].join('\n');
+}
+
 async function runDirectIntent(tools, intent) {
   switch (intent.action) {
     case 'read_document':
@@ -52,21 +65,22 @@ async function runDirectIntent(tools, intent) {
       return tools.readLayers();
     case 'place_latest_codex_image':
       return tools.placeLatestCodexImage({ fitMode: 'fit' });
-    case 'generate_and_place_image':
-      return tools.generateAndPlaceImage({
-        prompt: intent.prompt,
-        fitMode: 'fit',
-        layerName: 'AI Generated Image'
-      });
     default:
       throw new Error(`Unknown direct Photoshop action: ${intent.action}`);
   }
 }
 
-export function createBridgeServer({ appServer, store, host = '127.0.0.1' } = {}) {
+export function createBridgeServer({
+  appServer,
+  store,
+  host = '127.0.0.1',
+  codexImageDir,
+  imageWaitTimeoutMs = 15000
+} = {}) {
   const sseClients = new Set();
   const webSocketClients = new Set();
   const webSocketServer = new WebSocketServer({ noServer: true });
+  const pendingCodexImageImports = [];
 
   function broadcast(event) {
     for (const res of sseClients) res.write(serializeSse(event));
@@ -80,12 +94,72 @@ export function createBridgeServer({ appServer, store, host = '127.0.0.1' } = {}
     if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(event));
   }
 
+  async function placeGeneratedCodexImage(request) {
+    const image = await waitForLatestCodexImage({
+      searchDir: codexImageDir,
+      afterMs: request.startedAtMs,
+      timeoutMs: imageWaitTimeoutMs
+    });
+    if (!image) {
+      broadcast(panelEvent('error', {
+        message: 'Codex 已完成回复，但没有检测到新的生成图片。可以在这里让我重新生成一次。'
+      }));
+      return;
+    }
+
+    const tools = createPhotoshopTools({ appServer, mode: request.mode });
+    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'place_generated_codex_image', status: 'started' }));
+    const placeResult = await tools.placeImage({ filePath: image.path });
+
+    if (toolResultMentions(placeResult, /No active document/i)) {
+      const openResult = await tools.openImage({ filePath: image.path });
+      const text = [
+        'Codex 图片已生成，当前没有打开画布，已作为新文档打开',
+        `imagePath: ${image.path}`,
+        textFromToolResult(openResult)
+      ].join('\n');
+      await store?.appendOperation?.({ type: 'tool_event', tool: 'open_generated_codex_image', result: text });
+      broadcast(panelEvent('assistant_delta', { text }));
+      return;
+    }
+
+    if (placeResult?.isError) {
+      const text = [
+        'Codex 图片已生成，但导入 Photoshop 时失败',
+        `imagePath: ${image.path}`,
+        textFromToolResult(placeResult)
+      ].join('\n');
+      await store?.appendOperation?.({ type: 'tool_event', tool: 'place_generated_codex_image', result: text });
+      broadcast(panelEvent('error', { message: text, details: placeResult }));
+      return;
+    }
+
+    const fitResult = await tools.fitActiveLayerToDocument({ fillDocument: false });
+    const text = [
+      'Codex 图片已导入 Photoshop',
+      `imagePath: ${image.path}`,
+      textFromToolResult(placeResult),
+      textFromToolResult(fitResult)
+    ].join('\n');
+    await store?.appendOperation?.({ type: 'tool_event', tool: 'place_generated_codex_image', result: text });
+    broadcast(panelEvent('assistant_delta', { text }));
+  }
+
   async function handlePanelChat(body) {
     const mode = normalizeMode(body.mode);
     await store?.update?.({ mode });
     broadcast(panelEvent('user_message', { text: body.message, mode }));
     const directIntent = directIntentForMessage(body.message);
     if (directIntent) {
+      if (directIntent.action === 'generate_and_place_image') {
+        const startedAtMs = Date.now();
+        pendingCodexImageImports.push({ startedAtMs, mode, prompt: directIntent.prompt });
+        broadcast(panelEvent('tool_event', { server: 'codex', tool: 'image_generation', status: 'started' }));
+        await appServer.startTurn(codexImageGenerationPrompt(directIntent.prompt));
+        if (appServer.threadId) await store?.update?.({ threadId: appServer.threadId });
+        return;
+      }
+
       const tools = createPhotoshopTools({ appServer, mode });
       broadcast(panelEvent('tool_event', { server: 'photoshop', tool: directIntent.action, status: 'started' }));
 
@@ -103,6 +177,20 @@ export function createBridgeServer({ appServer, store, host = '127.0.0.1' } = {}
 
     await appServer.startTurn(body.message);
     if (appServer.threadId) await store?.update?.({ threadId: appServer.threadId });
+  }
+
+  async function handleAppServerNotification(notification) {
+    // Keep the normal Codex chat stream visible, then run Photoshop side effects
+    // after Codex's own image generation turn has finished writing files.
+    broadcast(normalizeAppServerNotification(notification));
+
+    if (notification?.method !== 'turn/completed' || pendingCodexImageImports.length === 0) return;
+    const request = pendingCodexImageImports.shift();
+    try {
+      await placeGeneratedCodexImage(request);
+    } catch (error) {
+      broadcast(panelEvent('error', { message: error.message }));
+    }
   }
 
   const listener = http.createServer(async (req, res) => {
@@ -192,6 +280,7 @@ export function createBridgeServer({ appServer, store, host = '127.0.0.1' } = {}
       webSocketServer.close();
       return new Promise(resolve => listener.close(resolve));
     },
-    broadcast
+    broadcast,
+    handleAppServerNotification
   };
 }

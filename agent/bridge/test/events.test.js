@@ -37,9 +37,51 @@ test('normalizes tool call notifications', () => {
   });
 });
 
+test('normalizes Codex image generation completion without image payload', () => {
+  const event = normalizeAppServerNotification({
+    method: 'item/completed',
+    params: {
+      item: {
+        type: 'imageGeneration',
+        savedPath: '/tmp/generated.png',
+        result: 'large-binary-payload'
+      }
+    }
+  }, 3500);
+
+  assert.deepEqual(event, {
+    type: 'tool_event',
+    timestamp: 3500,
+    server: 'codex',
+    tool: 'image_generation',
+    status: 'completed',
+    imagePath: '/tmp/generated.png'
+  });
+});
+
 test('normalizes turn completion', () => {
   const event = normalizeAppServerNotification({ method: 'turn/completed', params: {} }, 4000);
   assert.equal(event.type, 'turn_completed');
+});
+
+test('strips Codex image payloads from turn completion', () => {
+  const event = normalizeAppServerNotification({
+    method: 'turn/completed',
+    params: {
+      items: [{
+        type: 'imageGeneration',
+        savedPath: '/tmp/generated.png',
+        result: 'large-binary-payload'
+      }]
+    }
+  }, 4500);
+
+  assert.deepEqual(event.result, {
+    items: [{
+      type: 'imageGeneration',
+      savedPath: '/tmp/generated.png'
+    }]
+  });
 });
 
 test('unknown notifications are preserved for debugging', () => {

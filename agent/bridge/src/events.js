@@ -2,9 +2,26 @@ export function panelEvent(type, payload = {}, timestamp = Date.now()) {
   return { type, timestamp, ...payload };
 }
 
+function imagePathForItem(item = {}) {
+  return item.savedPath || item.outputPath || item.path || item.result?.savedPath || null;
+}
+
+function stripGeneratedImagePayloads(value) {
+  if (Array.isArray(value)) return value.map(stripGeneratedImagePayloads);
+  if (!value || typeof value !== 'object') return value;
+
+  const copy = {};
+  for (const [key, itemValue] of Object.entries(value)) {
+    if (key === 'result' && value.type === 'imageGeneration') continue;
+    copy[key] = stripGeneratedImagePayloads(itemValue);
+  }
+  return copy;
+}
+
 export function normalizeAppServerNotification(message, timestamp = Date.now()) {
   const method = message?.method || '';
   const params = message?.params || {};
+  const item = params.item || {};
 
   if (
     method === 'turn/output_text/delta' ||
@@ -22,15 +39,24 @@ export function normalizeAppServerNotification(message, timestamp = Date.now()) 
     }, timestamp);
   }
 
+  if ((method === 'item/started' || method === 'item/completed') && item.type === 'imageGeneration') {
+    return panelEvent('tool_event', {
+      server: 'codex',
+      tool: 'image_generation',
+      status: method === 'item/completed' ? 'completed' : 'started',
+      imagePath: imagePathForItem(item)
+    }, timestamp);
+  }
+
   if (method === 'turn/completed') {
-    return panelEvent('turn_completed', { result: params }, timestamp);
+    return panelEvent('turn_completed', { result: stripGeneratedImagePayloads(params) }, timestamp);
   }
 
   if (method === 'error') {
     return panelEvent('error', { message: params.message || 'Codex app-server error', details: params }, timestamp);
   }
 
-  return panelEvent('raw_event', { method, params }, timestamp);
+  return panelEvent('raw_event', { method, params: stripGeneratedImagePayloads(params) }, timestamp);
 }
 
 export function serializeSse(event) {
