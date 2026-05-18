@@ -6,6 +6,7 @@ import { createBridgeServer } from './server.js';
 import { createJsonRpcClient } from './json-rpc-client.js';
 import { createAppServerAdapter } from './app-server-adapter.js';
 import { normalizeAppServerNotification } from './events.js';
+import { loadEnvFile } from './env.js';
 
 const port = Number(process.env.CODEX_PS_BRIDGE_PORT || 17891);
 const statePath = process.env.CODEX_PS_STATE_PATH || join(homedir(), '.codex-ps-agent', 'state.json');
@@ -13,8 +14,12 @@ const codexBin = process.env.CODEX_BIN || 'codex';
 
 const store = createStore(statePath);
 const state = await store.read();
+const localEnv = await loadEnvFile(join(process.cwd(), '.env.local'));
 
-const appServerProcess = spawn(codexBin, ['app-server', '--listen', 'stdio://'], { stdio: ['pipe', 'pipe', 'pipe'] });
+const appServerProcess = spawn(codexBin, ['app-server', '--listen', 'stdio://'], {
+  stdio: ['pipe', 'pipe', 'pipe'],
+  env: { ...process.env, ...localEnv }
+});
 appServerProcess.stderr.on('data', chunk => console.error(chunk.toString('utf8')));
 
 const client = createJsonRpcClient({ input: appServerProcess.stdout, output: appServerProcess.stdin });

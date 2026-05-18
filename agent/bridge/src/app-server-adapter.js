@@ -66,12 +66,25 @@ export function createAppServerAdapter({
     },
 
     async callMcpTool(server, tool, args = {}) {
-      await initialize();
-      return client.request('mcpServer/tool/call', {
-        server,
-        tool,
-        arguments: args
-      });
+      const threadIdForTool = await this.ensureThread();
+      try {
+        return await client.request('mcpServer/tool/call', {
+          server,
+          threadId: threadIdForTool,
+          tool,
+          arguments: args
+        });
+      } catch (error) {
+        if (!isMissingThreadError(error)) throw error;
+        activeThreadId = null;
+        const recoveredThreadId = await this.ensureThread();
+        return client.request('mcpServer/tool/call', {
+          server,
+          threadId: recoveredThreadId,
+          tool,
+          arguments: args
+        });
+      }
     }
   };
 }
