@@ -54,6 +54,20 @@ function nextSocketEvent(socket, timeoutMs = 50) {
   });
 }
 
+async function waitForOpenSocket(socket) {
+  if (socket.readyState !== WebSocket.OPEN) await once(socket, 'open');
+  await new Promise(resolve => setTimeout(resolve, 20));
+}
+
+async function waitForCondition(predicate, timeoutMs = 5000) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (predicate()) return;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  throw new Error('Timed out waiting for condition');
+}
+
 test('GET /health returns bridge status', async () => {
   const server = createBridgeServer({ appServer: { startTurn: async () => ({}) } });
   const listener = await server.listen(0);
@@ -64,6 +78,27 @@ test('GET /health returns bridge status', async () => {
     assert.equal((await response.json()).ok, true);
   } finally {
     await server.close();
+  }
+});
+
+test('GET /gallery-image serves generated image previews', async () => {
+  const imageDir = await mkdtemp(join(tmpdir(), 'codex-ps-generated-'));
+  const server = createBridgeServer({
+    appServer: { startTurn: async () => ({}) },
+    codexImageDir: imageDir
+  });
+  const listener = await server.listen(0);
+  try {
+    const imagePath = join(imageDir, 'preview.png');
+    await writeFile(imagePath, 'png bytes', 'utf8');
+    const port = listener.address().port;
+    const response = await fetch(`http://127.0.0.1:${port}/gallery-image?path=${encodeURIComponent(imagePath)}`);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('content-type'), 'image/png');
+    assert.equal(await response.text(), 'png bytes');
+  } finally {
+    await server.close();
+    await rm(imageDir, { recursive: true, force: true });
   }
 });
 
@@ -340,6 +375,87 @@ test('raw app-server notifications are not forwarded to the panel', async () => 
   } finally {
     socket.close();
     await server.close();
+  }
+});
+
+test('WebSocket /socket lists gallery images', async () => {
+  const imageDir = await mkdtemp(join(tmpdir(), 'codex-ps-generated-'));
+  const server = createBridgeServer({
+    appServer: {
+      async startTurn() {
+        return { turn: { id: 'turn-1' } };
+      }
+    },
+    codexImageDir: imageDir
+  });
+  const listener = await server.listen(0);
+  const socket = new WebSocket(`ws://127.0.0.1:${listener.address().port}/socket`);
+  try {
+    const imagePath = join(imageDir, 'gallery.png');
+    await writeFile(imagePath, 'fake png', 'utf8');
+    await waitForOpenSocket(socket);
+
+    const galleryPromise = waitForSocketEvent(socket, event => event.type === 'gallery_images');
+    socket.send(JSON.stringify({ type: 'list_gallery' }));
+    const event = await galleryPromise;
+    assert.equal(event.images.length, 1);
+    assert.equal(event.images[0].path, imagePath);
+    assert.equal(event.images[0].previewUrl, `/gallery-image?path=${encodeURIComponent(imagePath)}`);
+  } finally {
+    socket.close();
+    await server.close();
+    await rm(imageDir, { recursive: true, force: true });
+  }
+});
+
+test('WebSocket /socket imports selected gallery images', async () => {
+  const imageDir = await mkdtemp(join(tmpdir(), 'codex-ps-generated-'));
+  const calls = [];
+  const server = createBridgeServer({
+    appServer: {
+      async startTurn() {
+        return { turn: { id: 'turn-1' } };
+      },
+      async callMcpTool(serverName, tool, args) {
+        calls.push({ server: serverName, tool, args });
+        return { content: [{ type: 'text', text: `${tool}: ok` }] };
+      }
+    },
+    codexImageDir: imageDir
+  });
+  const listener = await server.listen(0);
+  const socket = new WebSocket(`ws://127.0.0.1:${listener.address().port}/socket`);
+  try {
+    const firstPath = join(imageDir, 'first.png');
+    const secondPath = join(imageDir, 'second.png');
+    await writeFile(firstPath, 'first', 'utf8');
+    await writeFile(secondPath, 'second', 'utf8');
+    await waitForOpenSocket(socket);
+
+    socket.send(JSON.stringify({ type: 'import_images', paths: [firstPath, secondPath], mode: 'safe-auto' }));
+    await waitForCondition(() => calls.length === 4);
+
+    assert.deepEqual(calls, [{
+      server: 'photoshop',
+      tool: 'photoshop_place_image',
+      args: { filePath: firstPath, x: 0, y: 0 }
+    }, {
+      server: 'photoshop',
+      tool: 'photoshop_fit_layer_to_document',
+      args: { fillDocument: false }
+    }, {
+      server: 'photoshop',
+      tool: 'photoshop_place_image',
+      args: { filePath: secondPath, x: 0, y: 0 }
+    }, {
+      server: 'photoshop',
+      tool: 'photoshop_fit_layer_to_document',
+      args: { fillDocument: false }
+    }]);
+  } finally {
+    socket.close();
+    await server.close();
+    await rm(imageDir, { recursive: true, force: true });
   }
 });
 

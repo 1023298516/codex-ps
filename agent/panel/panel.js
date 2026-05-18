@@ -1,4 +1,5 @@
 const BRIDGE_SOCKET_URL = 'ws://127.0.0.1:17891/socket';
+const BRIDGE_HTTP_URL = 'http://127.0.0.1:17891';
 
 let mode = 'safe-auto';
 let socket = null;
@@ -7,6 +8,13 @@ let log = null;
 let connection = null;
 let messageInput = null;
 let activeAssistantEvent = null;
+let galleryModal = null;
+let galleryGrid = null;
+let galleryEmpty = null;
+let gallerySelectedCount = null;
+let galleryImportSelected = null;
+let galleryImages = [];
+let selectedImagePaths = new Set();
 
 function addEvent(event) {
   if (!log) return;
@@ -51,6 +59,114 @@ function sendChat(message) {
   }
 }
 
+function requestGallery() {
+  try {
+    sendCommand({ type: 'list_gallery' });
+  } catch (error) {
+    addEvent({ type: 'error', message: error.message });
+  }
+}
+
+function importImages(paths) {
+  if (!paths.length) {
+    addEvent({ type: 'error', message: '请先在图库里选择图片。' });
+    return;
+  }
+
+  try {
+    sendCommand({ type: 'import_images', paths, mode });
+  } catch (error) {
+    addEvent({ type: 'error', message: error.message });
+  }
+}
+
+function galleryImageUrl(image) {
+  if (!image.previewUrl) return '';
+  if (/^https?:\/\//.test(image.previewUrl)) return image.previewUrl;
+  return `${BRIDGE_HTTP_URL}${image.previewUrl}`;
+}
+
+function updateGallerySelection() {
+  const count = selectedImagePaths.size;
+  if (gallerySelectedCount) gallerySelectedCount.textContent = `已选择 ${count} 张`;
+  if (galleryImportSelected) {
+    galleryImportSelected.textContent = count > 0 ? `导入选中 ${count} 张` : '导入选中';
+    galleryImportSelected.toggleAttribute('disabled', count === 0);
+  }
+
+  if (!galleryGrid) return;
+  galleryGrid.querySelectorAll('[data-image-path]').forEach(card => {
+    card.classList.toggle('selected', selectedImagePaths.has(card.dataset.imagePath));
+  });
+}
+
+function toggleGalleryImage(path) {
+  if (selectedImagePaths.has(path)) {
+    selectedImagePaths.delete(path);
+  } else {
+    selectedImagePaths.add(path);
+  }
+  updateGallerySelection();
+}
+
+function renderGallery(images) {
+  galleryImages = images || [];
+  if (!galleryGrid || !galleryEmpty) return;
+  galleryGrid.textContent = '';
+  galleryEmpty.classList.toggle('hidden', galleryImages.length > 0);
+  galleryGrid.classList.toggle('hidden', galleryImages.length === 0);
+
+  for (const image of galleryImages) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'gallery-card';
+    card.dataset.imagePath = image.path;
+    card.addEventListener('click', () => toggleGalleryImage(image.path));
+
+    const preview = document.createElement('img');
+    preview.className = 'gallery-thumb';
+    preview.src = galleryImageUrl(image);
+    preview.alt = image.name || 'Codex image';
+    card.appendChild(preview);
+
+    const meta = document.createElement('div');
+    meta.className = 'gallery-card-meta';
+
+    const name = document.createElement('span');
+    name.textContent = image.name || 'Codex image';
+    meta.appendChild(name);
+
+    const importButton = document.createElement('button');
+    importButton.type = 'button';
+    importButton.className = 'gallery-import-one';
+    importButton.textContent = '导入';
+    importButton.addEventListener('click', event => {
+      event.stopPropagation();
+      importImages([image.path]);
+    });
+    meta.appendChild(importButton);
+
+    card.appendChild(meta);
+    galleryGrid.appendChild(card);
+  }
+
+  selectedImagePaths = new Set([...selectedImagePaths].filter(path => galleryImages.some(image => image.path === path)));
+  updateGallerySelection();
+}
+
+function openGallery() {
+  if (!galleryModal) return;
+  galleryModal.classList.remove('hidden');
+  galleryModal.setAttribute('aria-hidden', 'false');
+  requestGallery();
+}
+
+function closeGallery() {
+  if (!galleryModal) return;
+  galleryModal.classList.add('hidden');
+  galleryModal.setAttribute('aria-hidden', 'true');
+}
+
 function scheduleReconnect() {
   if (reconnectTimer) return;
   reconnectTimer = setTimeout(() => {
@@ -83,7 +199,12 @@ function connectBridge() {
 
   socket.onmessage = message => {
     try {
-      addEvent(JSON.parse(message.data));
+      const event = JSON.parse(message.data);
+      if (event.type === 'gallery_images') {
+        renderGallery(event.images);
+        return;
+      }
+      addEvent(event);
     } catch (error) {
       addEvent({ type: 'error', message: error.message });
     }
@@ -102,6 +223,11 @@ function init() {
   log = document.querySelector('#log');
   connection = document.querySelector('#connection');
   messageInput = document.querySelector('#message');
+  galleryModal = document.querySelector('#gallery-modal');
+  galleryGrid = document.querySelector('#gallery-grid');
+  galleryEmpty = document.querySelector('#gallery-empty');
+  gallerySelectedCount = document.querySelector('#gallery-selected-count');
+  galleryImportSelected = document.querySelector('#gallery-import-selected');
 
   document.querySelectorAll('[data-mode]').forEach(button => {
     button.addEventListener('click', () => {
@@ -128,6 +254,21 @@ function init() {
     }
   });
 
+  document.querySelector('#gallery-open').addEventListener('click', openGallery);
+
+  document.querySelector('#gallery-close').addEventListener('click', closeGallery);
+
+  document.querySelector('#gallery-refresh').addEventListener('click', requestGallery);
+
+  document.querySelector('#gallery-clear-selection').addEventListener('click', () => {
+    selectedImagePaths.clear();
+    updateGallerySelection();
+  });
+
+  galleryImportSelected.addEventListener('click', () => {
+    importImages([...selectedImagePaths]);
+  });
+
   document.querySelector('#import-latest').addEventListener('click', () => {
     sendChat('导入最新 Codex 图片到当前 Photoshop 画布，作为智能对象。');
   });
@@ -141,6 +282,7 @@ function init() {
   });
 
   addEvent({ type: 'status', message: 'Panel UI initialized' });
+  updateGallerySelection();
   connectBridge();
 }
 

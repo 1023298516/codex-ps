@@ -25,6 +25,7 @@
       </div>
 
       <div class="quick-actions">
+        <sp-button id="gallery-open" size="s">图库</sp-button>
         <sp-button id="import-latest" size="s">导入最新图</sp-button>
         <sp-button id="read-canvas" size="s">读取画布</sp-button>
         <sp-button id="read-layers" size="s">读取图层</sp-button>
@@ -33,6 +34,33 @@
       <div id="composer" class="composer">
         <textarea id="message" rows="3" placeholder="描述你要生成、导入或修改的画面..."></textarea>
         <sp-button id="send" size="s">发送</sp-button>
+      </div>
+    </div>
+
+    <div id="gallery-modal" class="gallery-modal hidden" aria-hidden="true">
+      <div class="gallery-dialog">
+        <div class="gallery-header">
+          <div>
+            <strong>图库</strong>
+            <span id="gallery-selected-count">已选择 0 张</span>
+          </div>
+          <div class="gallery-header-actions">
+            <sp-button id="gallery-refresh" size="s">刷新</sp-button>
+            <sp-button id="gallery-close" size="s">关闭</sp-button>
+          </div>
+        </div>
+
+        <div id="gallery-empty" class="gallery-empty hidden">
+          <strong>还没有可导入的图片</strong>
+          <span>先在面板里生成图片，Codex 生成后的图片会自动出现在这里。</span>
+        </div>
+
+        <div id="gallery-grid" class="gallery-grid"></div>
+
+        <div class="gallery-footer">
+          <sp-button id="gallery-clear-selection" size="s">取消选择</sp-button>
+          <sp-button id="gallery-import-selected" size="s">导入选中</sp-button>
+        </div>
       </div>
     </div>
     <script src="./panel.js"></script>

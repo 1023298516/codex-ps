@@ -1,9 +1,17 @@
-import { readdir, stat } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { basename, relative, resolve, sep, join } from 'node:path';
 
 const DEFAULT_CODEX_IMAGE_DIR = join(homedir(), '.codex', 'generated_images');
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.tif', '.tiff']);
+const CONTENT_TYPES = new Map([
+  ['.png', 'image/png'],
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.webp', 'image/webp'],
+  ['.tif', 'image/tiff'],
+  ['.tiff', 'image/tiff']
+]);
 
 function imageExt(filePath) {
   const lower = filePath.toLowerCase();
@@ -51,6 +59,39 @@ export async function latestCodexImage({ searchDir = DEFAULT_CODEX_IMAGE_DIR, af
   return images
     .filter(image => image.mtimeMs >= afterMs)
     .sort((a, b) => b.mtimeMs - a.mtimeMs)[0] || null;
+}
+
+export async function listCodexImages({ searchDir = DEFAULT_CODEX_IMAGE_DIR, limit = 60 } = {}) {
+  const images = await collectImages(searchDir);
+  return images
+    .sort((a, b) => b.mtimeMs - a.mtimeMs)
+    .slice(0, limit)
+    .map(image => ({
+      ...image,
+      name: basename(image.path),
+      previewUrl: `/gallery-image?path=${encodeURIComponent(image.path)}`
+    }));
+}
+
+function assertInsideSearchDir(searchDir, filePath) {
+  const root = resolve(searchDir);
+  const target = resolve(filePath);
+  const pathFromRoot = relative(root, target);
+  if (pathFromRoot.startsWith('..') || pathFromRoot === '..' || pathFromRoot.includes(`..${sep}`)) {
+    throw new Error('Requested image is outside generated images directory');
+  }
+  return target;
+}
+
+export async function readCodexImageFile({ searchDir = DEFAULT_CODEX_IMAGE_DIR, filePath } = {}) {
+  const safePath = assertInsideSearchDir(searchDir, filePath);
+  const ext = imageExt(safePath);
+  const contentType = CONTENT_TYPES.get(ext);
+  if (!contentType) throw new Error('Unsupported image file');
+  return {
+    contentType,
+    buffer: await readFile(safePath)
+  };
 }
 
 export async function waitForLatestCodexImage({

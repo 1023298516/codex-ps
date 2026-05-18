@@ -3,7 +3,7 @@ import { WebSocketServer } from 'ws';
 import { normalizeAppServerNotification, panelEvent, serializeSse } from './events.js';
 import { normalizeMode } from './policy.js';
 import { createPhotoshopTools } from './photoshop-tools.js';
-import { latestCodexImage, waitForLatestCodexImage } from './codex-images.js';
+import { latestCodexImage, listCodexImages, readCodexImageFile, waitForLatestCodexImage } from './codex-images.js';
 
 async function readJson(req) {
   const chunks = [];
@@ -19,6 +19,15 @@ function sendJson(res, status, data) {
     'access-control-allow-headers': 'content-type'
   });
   res.end(JSON.stringify(data));
+}
+
+function sendFile(res, status, data, contentType) {
+  res.writeHead(status, {
+    'content-type': contentType,
+    'access-control-allow-origin': '*',
+    'cache-control': 'no-cache'
+  });
+  res.end(data);
 }
 
 function textFromToolResult(result) {
@@ -164,6 +173,29 @@ export function createBridgeServer({
     await placeCodexImageFile({ image, mode, source: 'latest' });
   }
 
+  async function listGalleryImages() {
+    return listCodexImages({ searchDir: codexImageDir });
+  }
+
+  async function importGalleryImages(paths = [], mode = 'safe-auto') {
+    const normalizedMode = normalizeMode(mode);
+    if (!Array.isArray(paths) || paths.length === 0) {
+      broadcast(panelEvent('error', { message: '请先在图库里选择至少一张图片。' }));
+      return;
+    }
+
+    for (const filePath of paths) {
+      await readCodexImageFile({ searchDir: codexImageDir, filePath });
+      await placeCodexImageFile({
+        image: { path: filePath },
+        mode: normalizedMode,
+        source: 'latest'
+      });
+    }
+
+    broadcast(panelEvent('assistant_delta', { text: `已导入 ${paths.length} 张图库图片到 Photoshop。` }));
+  }
+
   async function handlePanelChat(body) {
     const mode = normalizeMode(body.mode);
     await store?.update?.({ mode });
@@ -230,6 +262,14 @@ export function createBridgeServer({
         return;
       }
 
+      if (req.method === 'GET' && req.url?.startsWith('/gallery-image')) {
+        const url = new URL(req.url, `http://${req.headers.host || '127.0.0.1'}`);
+        const filePath = url.searchParams.get('path');
+        const image = await readCodexImageFile({ searchDir: codexImageDir, filePath });
+        sendFile(res, 200, image.buffer, image.contentType);
+        return;
+      }
+
       if (req.method === 'GET' && req.url === '/events') {
         res.writeHead(200, {
           'content-type': 'text/event-stream; charset=utf-8',
@@ -278,6 +318,18 @@ export function createBridgeServer({
         if (body.type === 'chat') {
           await handlePanelChat(body);
           sendSocket(socket, panelEvent('status', { message: 'Message sent to Codex' }));
+          return;
+        }
+
+        if (body.type === 'list_gallery') {
+          const images = await listGalleryImages();
+          sendSocket(socket, panelEvent('gallery_images', { images }));
+          return;
+        }
+
+        if (body.type === 'import_images') {
+          await importGalleryImages(body.paths, body.mode);
+          sendSocket(socket, panelEvent('status', { message: 'Gallery import requested' }));
           return;
         }
 
