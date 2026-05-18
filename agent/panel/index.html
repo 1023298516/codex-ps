@@ -8,32 +8,53 @@
   <body>
     <div class="panel">
       <div class="topbar">
-        <div>
-          <strong>Codex PS</strong>
-          <span id="connection">Disconnected</span>
+        <div class="brand">
+          <span class="brand-mark">Ps</span>
+          <div>
+            <strong>Codex PS</strong>
+            <span class="connection-line"><span class="status-dot"></span><span id="connection">Disconnected</span></span>
+          </div>
         </div>
-        <sp-button id="interrupt" size="s">Stop</sp-button>
+        <button id="interrupt" class="button button-secondary" type="button">Stop</button>
       </div>
 
       <div class="mode-switch">
-        <sp-button data-mode="safe-auto" class="active" size="s">B 安全自动</sp-button>
-        <sp-button data-mode="full-auto" size="s">C 全自动</sp-button>
+        <button data-mode="safe-auto" class="segmented-button active" type="button">B 安全自动</button>
+        <button data-mode="full-auto" class="segmented-button" type="button">C 全自动</button>
+      </div>
+
+      <div class="primary-actions">
+        <div class="section-label">快捷操作</div>
+        <div class="quick-actions">
+          <button id="gallery-open" class="action-button action-primary" type="button">
+            <span class="action-icon">▦</span>
+            <span>图库</span>
+          </button>
+          <button id="import-latest" class="action-button" type="button">
+            <span class="action-icon">↧</span>
+            <span>导入最新</span>
+          </button>
+          <button id="read-canvas" class="action-button" type="button">
+            <span class="action-icon">◱</span>
+            <span>读画布</span>
+          </button>
+          <button id="read-layers" class="action-button" type="button">
+            <span class="action-icon">≡</span>
+            <span>读图层</span>
+          </button>
+        </div>
       </div>
 
       <div id="log" class="log">
         <div class="event status">面板已打开，正在连接 Codex bridge...</div>
       </div>
 
-      <div class="quick-actions">
-        <sp-button id="gallery-open" size="s">图库</sp-button>
-        <sp-button id="import-latest" size="s">导入最新图</sp-button>
-        <sp-button id="read-canvas" size="s">读取画布</sp-button>
-        <sp-button id="read-layers" size="s">读取图层</sp-button>
-      </div>
-
       <div id="composer" class="composer">
-        <textarea id="message" rows="3" placeholder="描述你要生成、导入或修改的画面..."></textarea>
-        <sp-button id="send" size="s">发送</sp-button>
+        <textarea id="message" rows="3" placeholder="描述要生成、导入或修改的画面..."></textarea>
+        <div class="composer-footer">
+          <span>⌘ Enter 发送</span>
+          <button id="send" class="button button-primary" type="button">发送</button>
+        </div>
       </div>
     </div>
 
@@ -42,12 +63,18 @@
         <div class="gallery-header">
           <div>
             <strong>图库</strong>
-            <span id="gallery-selected-count">已选择 0 张</span>
+            <span class="gallery-count-line"><span id="gallery-selected-count">已选择 0 张</span><span id="gallery-total-count"> · 共 0 张</span></span>
           </div>
           <div class="gallery-header-actions">
-            <sp-button id="gallery-refresh" size="s">刷新</sp-button>
-            <sp-button id="gallery-close" size="s">关闭</sp-button>
+            <button id="gallery-refresh" class="button button-secondary" type="button">刷新</button>
+            <button id="gallery-close" class="button button-secondary" type="button">关闭</button>
           </div>
+        </div>
+
+        <div class="gallery-toolbar">
+          <span>最近生成</span>
+          <span>可多选</span>
+          <span>智能对象</span>
         </div>
 
         <div id="gallery-empty" class="gallery-empty hidden">
@@ -58,8 +85,31 @@
         <div id="gallery-grid" class="gallery-grid"></div>
 
         <div class="gallery-footer">
-          <sp-button id="gallery-clear-selection" size="s">取消选择</sp-button>
-          <sp-button id="gallery-import-selected" size="s">导入选中</sp-button>
+          <button id="gallery-clear-selection" class="button button-secondary" type="button">取消选择</button>
+          <button id="gallery-import-selected" class="button button-primary" type="button">导入选中</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="preview-modal" class="preview-modal hidden" aria-hidden="true">
+      <div class="preview-dialog">
+        <div class="preview-header">
+          <div>
+            <strong id="preview-title">预览图片</strong>
+            <span id="preview-meta">确认后导入 Photoshop 画布</span>
+          </div>
+          <button id="preview-close" class="button button-secondary" type="button">关闭</button>
+        </div>
+        <div class="preview-frame">
+          <img id="preview-image" alt="Codex generated preview">
+        </div>
+        <div class="preview-note">
+          <strong>智能对象</strong>
+          <span>保留可编辑图层，适合后续修图。</span>
+        </div>
+        <div class="preview-footer">
+          <button id="preview-cancel" class="button button-secondary" type="button">留在图库</button>
+          <button id="preview-import" class="button button-primary" type="button">导入画布</button>
         </div>
       </div>
     </div>

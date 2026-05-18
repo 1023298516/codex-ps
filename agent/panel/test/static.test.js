@@ -51,6 +51,8 @@ test('panel exposes a gallery modal for generated images', async () => {
   assert.match(html, /id="gallery-modal"/);
   assert.match(html, /id="gallery-grid"/);
   assert.match(html, /id="gallery-import-selected"/);
+  assert.match(html, /id="preview-modal"/);
+  assert.match(html, /id="preview-import"/);
 });
 
 test('panel can request gallery images and import multiple selections', async () => {
@@ -59,6 +61,8 @@ test('panel can request gallery images and import multiple selections', async ()
   assert.match(js, /event\.type === 'gallery_images'/);
   assert.match(js, /type: 'import_images'/);
   assert.match(js, /selectedImagePaths/);
+  assert.match(js, /openImportPreview/);
+  assert.match(js, /confirmImportPreview/);
 });
 
 test('panel manifest icon files exist for UXP loading', async () => {

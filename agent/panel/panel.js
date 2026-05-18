@@ -4,6 +4,7 @@ const BRIDGE_HTTP_URL = 'http://127.0.0.1:17891';
 let mode = 'safe-auto';
 let socket = null;
 let reconnectTimer = null;
+let panelRoot = null;
 let log = null;
 let connection = null;
 let messageInput = null;
@@ -12,9 +13,16 @@ let galleryModal = null;
 let galleryGrid = null;
 let galleryEmpty = null;
 let gallerySelectedCount = null;
+let galleryTotalCount = null;
 let galleryImportSelected = null;
+let previewModal = null;
+let previewImage = null;
+let previewTitle = null;
+let previewMeta = null;
+let previewImport = null;
 let galleryImages = [];
 let selectedImagePaths = new Set();
+let pendingImportPaths = [];
 
 function addEvent(event) {
   if (!log) return;
@@ -59,6 +67,14 @@ function sendChat(message) {
   }
 }
 
+function setConnectionState(state) {
+  if (!connection) return;
+  connection.textContent = state;
+  if (!panelRoot) return;
+  panelRoot.classList.toggle('is-connected', state === 'Connected');
+  panelRoot.classList.toggle('is-error', state === 'Connection error' || state === 'WebSocket unavailable');
+}
+
 function requestGallery() {
   try {
     sendCommand({ type: 'list_gallery' });
@@ -80,6 +96,10 @@ function importImages(paths) {
   }
 }
 
+function findGalleryImage(path) {
+  return galleryImages.find(image => image.path === path);
+}
+
 function galleryImageUrl(image) {
   if (!image.previewUrl) return '';
   if (/^https?:\/\//.test(image.previewUrl)) return image.previewUrl;
@@ -89,6 +109,7 @@ function galleryImageUrl(image) {
 function updateGallerySelection() {
   const count = selectedImagePaths.size;
   if (gallerySelectedCount) gallerySelectedCount.textContent = `已选择 ${count} 张`;
+  if (galleryTotalCount) galleryTotalCount.textContent = ` · 共 ${galleryImages.length} 张`;
   if (galleryImportSelected) {
     galleryImportSelected.textContent = count > 0 ? `导入选中 ${count} 张` : '导入选中';
     galleryImportSelected.toggleAttribute('disabled', count === 0);
@@ -109,6 +130,48 @@ function toggleGalleryImage(path) {
   updateGallerySelection();
 }
 
+function openImportPreview(paths) {
+  const nextPaths = paths.filter(Boolean);
+  if (!nextPaths.length) {
+    addEvent({ type: 'error', message: '请先在图库里选择图片。' });
+    return;
+  }
+
+  pendingImportPaths = nextPaths;
+  const firstImage = findGalleryImage(nextPaths[0]);
+  if (previewImage) {
+    previewImage.src = firstImage ? galleryImageUrl(firstImage) : '';
+  }
+  if (previewTitle) {
+    previewTitle.textContent = nextPaths.length > 1 ? `预览 ${nextPaths.length} 张图片` : '预览图片';
+  }
+  if (previewMeta) {
+    previewMeta.textContent = nextPaths.length > 1
+      ? '确认后会依次导入当前 Photoshop 画布'
+      : '确认后导入当前 Photoshop 画布';
+  }
+  if (previewImport) {
+    previewImport.textContent = nextPaths.length > 1 ? `导入 ${nextPaths.length} 张` : '导入画布';
+  }
+  if (previewModal) {
+    previewModal.classList.remove('hidden');
+    previewModal.setAttribute('aria-hidden', 'false');
+  }
+}
+
+function closeImportPreview() {
+  pendingImportPaths = [];
+  if (!previewModal) return;
+  previewModal.classList.add('hidden');
+  previewModal.setAttribute('aria-hidden', 'true');
+}
+
+function confirmImportPreview() {
+  const paths = [...pendingImportPaths];
+  closeImportPreview();
+  importImages(paths);
+}
+
 function renderGallery(images) {
   galleryImages = images || [];
   if (!galleryGrid || !galleryEmpty) return;
@@ -117,11 +180,18 @@ function renderGallery(images) {
   galleryGrid.classList.toggle('hidden', galleryImages.length === 0);
 
   for (const image of galleryImages) {
-    const card = document.createElement('button');
-    card.type = 'button';
+    const card = document.createElement('div');
     card.className = 'gallery-card';
+    card.role = 'button';
+    card.tabIndex = 0;
     card.dataset.imagePath = image.path;
     card.addEventListener('click', () => toggleGalleryImage(image.path));
+    card.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        toggleGalleryImage(image.path);
+      }
+    });
 
     const preview = document.createElement('img');
     preview.className = 'gallery-thumb';
@@ -139,10 +209,10 @@ function renderGallery(images) {
     const importButton = document.createElement('button');
     importButton.type = 'button';
     importButton.className = 'gallery-import-one';
-    importButton.textContent = '导入';
+    importButton.textContent = '预览';
     importButton.addEventListener('click', event => {
       event.stopPropagation();
-      importImages([image.path]);
+      openImportPreview([image.path]);
     });
     meta.appendChild(importButton);
 
@@ -163,6 +233,7 @@ function openGallery() {
 
 function closeGallery() {
   if (!galleryModal) return;
+  closeImportPreview();
   galleryModal.classList.add('hidden');
   galleryModal.setAttribute('aria-hidden', 'true');
 }
@@ -177,7 +248,7 @@ function scheduleReconnect() {
 
 function connectBridge() {
   if (typeof WebSocket === 'undefined') {
-    connection.textContent = 'WebSocket unavailable';
+    setConnectionState('WebSocket unavailable');
     addEvent({ type: 'error', message: 'Photoshop UXP did not expose WebSocket in this panel.' });
     return;
   }
@@ -185,16 +256,16 @@ function connectBridge() {
   socket = new WebSocket(BRIDGE_SOCKET_URL);
 
   socket.onopen = () => {
-    connection.textContent = 'Connected';
+    setConnectionState('Connected');
   };
 
   socket.onclose = () => {
-    connection.textContent = 'Reconnecting';
+    setConnectionState('Reconnecting');
     scheduleReconnect();
   };
 
   socket.onerror = () => {
-    connection.textContent = 'Connection error';
+    setConnectionState('Connection error');
   };
 
   socket.onmessage = message => {
@@ -220,6 +291,7 @@ function submitMessage() {
 }
 
 function init() {
+  panelRoot = document.querySelector('.panel');
   log = document.querySelector('#log');
   connection = document.querySelector('#connection');
   messageInput = document.querySelector('#message');
@@ -227,7 +299,13 @@ function init() {
   galleryGrid = document.querySelector('#gallery-grid');
   galleryEmpty = document.querySelector('#gallery-empty');
   gallerySelectedCount = document.querySelector('#gallery-selected-count');
+  galleryTotalCount = document.querySelector('#gallery-total-count');
   galleryImportSelected = document.querySelector('#gallery-import-selected');
+  previewModal = document.querySelector('#preview-modal');
+  previewImage = document.querySelector('#preview-image');
+  previewTitle = document.querySelector('#preview-title');
+  previewMeta = document.querySelector('#preview-meta');
+  previewImport = document.querySelector('#preview-import');
 
   document.querySelectorAll('[data-mode]').forEach(button => {
     button.addEventListener('click', () => {
@@ -266,8 +344,14 @@ function init() {
   });
 
   galleryImportSelected.addEventListener('click', () => {
-    importImages([...selectedImagePaths]);
+    openImportPreview([...selectedImagePaths]);
   });
+
+  document.querySelector('#preview-close').addEventListener('click', closeImportPreview);
+
+  document.querySelector('#preview-cancel').addEventListener('click', closeImportPreview);
+
+  previewImport.addEventListener('click', confirmImportPreview);
 
   document.querySelector('#import-latest').addEventListener('click', () => {
     sendChat('导入最新 Codex 图片到当前 Photoshop 画布，作为智能对象。');
