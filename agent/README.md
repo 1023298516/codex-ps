@@ -10,6 +10,8 @@ This folder contains the Photoshop-side Codex agent MVP.
 
 ## Local Development
 
+Project update notes are tracked in [`../UPDATE_LOG.md`](../UPDATE_LOG.md).
+
 Run tests:
 
 ```bash
