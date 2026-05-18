@@ -105,6 +105,44 @@ test('POST /chat persists the active Codex thread id', async () => {
   }
 });
 
+test('POST /chat routes image generation requests to Photoshop MCP', async () => {
+  const calls = [];
+  const server = createBridgeServer({
+    appServer: {
+      async startTurn() {
+        throw new Error('startTurn should not be called for direct image generation');
+      },
+      async callMcpTool(serverName, tool, args) {
+        calls.push({ server: serverName, tool, args });
+        return { content: [{ type: 'text', text: 'OpenAI image generated and placed' }] };
+      }
+    }
+  });
+  const listener = await server.listen(0);
+  try {
+    const port = listener.address().port;
+    const response = await fetch(`http://127.0.0.1:${port}/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: '生成一只猪', mode: 'safe-auto' })
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(calls[0], {
+      server: 'photoshop',
+      tool: 'photoshop_ai_generate_and_place',
+      args: {
+        prompt: '生成一只猪',
+        fitMode: 'fit',
+        layerName: 'AI Generated Image',
+        size: '1024x1024',
+        quality: 'auto'
+      }
+    });
+  } finally {
+    await server.close();
+  }
+});
+
 test('WebSocket /socket accepts a panel chat message', async () => {
   const calls = [];
   const server = createBridgeServer({

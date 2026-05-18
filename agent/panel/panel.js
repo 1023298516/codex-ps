@@ -11,6 +11,7 @@ let activeAssistantEvent = null;
 function addEvent(event) {
   if (!log) return;
   if (event.type === 'raw_event') return;
+  if (event.type === 'user_message') return;
 
   if (event.type === 'assistant_delta') {
     if (!activeAssistantEvent) {

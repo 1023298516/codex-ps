@@ -39,6 +39,11 @@ test('panel hides raw app-server transport events', async () => {
   assert.match(js, /event\.type === 'raw_event'/);
 });
 
+test('panel hides echoed bridge user messages', async () => {
+  const js = await readFile('agent/panel/panel.js', 'utf8');
+  assert.match(js, /event\.type === 'user_message'/);
+});
+
 test('panel manifest icon files exist for UXP loading', async () => {
   const manifest = JSON.parse(await readFile('agent/panel/manifest.json', 'utf8'));
   const iconPaths = [

@@ -2,6 +2,7 @@ import http from 'node:http';
 import { WebSocketServer } from 'ws';
 import { panelEvent, serializeSse } from './events.js';
 import { normalizeMode } from './policy.js';
+import { createPhotoshopTools } from './photoshop-tools.js';
 
 async function readJson(req) {
   const chunks = [];
@@ -17,6 +18,49 @@ function sendJson(res, status, data) {
     'access-control-allow-headers': 'content-type'
   });
   res.end(JSON.stringify(data));
+}
+
+function textFromToolResult(result) {
+  const content = result?.content;
+  if (Array.isArray(content)) {
+    const text = content
+      .filter(item => item?.type === 'text' && item.text)
+      .map(item => item.text)
+      .join('\n');
+    if (text) return text;
+  }
+  return JSON.stringify(result);
+}
+
+function directIntentForMessage(message = '') {
+  const text = String(message).trim();
+  if (/读取.*(画布|文档信息|文档)|读.*(画布|文档信息|文档)/.test(text)) return { action: 'read_document' };
+  if (/读取.*图层|读.*图层/.test(text)) return { action: 'read_layers' };
+  if (/导入.*最新.*图|放入.*最新.*图|置入.*最新.*图/.test(text)) return { action: 'place_latest_codex_image' };
+
+  const asksForImage = /^(生成|画|绘制|创建|做)(?!.*(文字|文案|代码|说明|列表))/.test(text) || /生图|生成.*(图片|图像|照片|海报|视觉)/.test(text);
+  if (asksForImage) return { action: 'generate_and_place_image', prompt: text };
+
+  return null;
+}
+
+async function runDirectIntent(tools, intent) {
+  switch (intent.action) {
+    case 'read_document':
+      return tools.readDocument();
+    case 'read_layers':
+      return tools.readLayers();
+    case 'place_latest_codex_image':
+      return tools.placeLatestCodexImage({ fitMode: 'fit' });
+    case 'generate_and_place_image':
+      return tools.generateAndPlaceImage({
+        prompt: intent.prompt,
+        fitMode: 'fit',
+        layerName: 'AI Generated Image'
+      });
+    default:
+      throw new Error(`Unknown direct Photoshop action: ${intent.action}`);
+  }
 }
 
 export function createBridgeServer({ appServer, store, host = '127.0.0.1' } = {}) {
@@ -40,6 +84,23 @@ export function createBridgeServer({ appServer, store, host = '127.0.0.1' } = {}
     const mode = normalizeMode(body.mode);
     await store?.update?.({ mode });
     broadcast(panelEvent('user_message', { text: body.message, mode }));
+    const directIntent = directIntentForMessage(body.message);
+    if (directIntent) {
+      const tools = createPhotoshopTools({ appServer, mode });
+      broadcast(panelEvent('tool_event', { server: 'photoshop', tool: directIntent.action, status: 'started' }));
+
+      const result = await runDirectIntent(tools, directIntent);
+      const text = textFromToolResult(result);
+      await store?.appendOperation?.({ type: 'tool_event', tool: directIntent.action, result: text });
+      if (result?.isError) {
+        broadcast(panelEvent('error', { message: text, details: result }));
+      } else {
+        broadcast(panelEvent('assistant_delta', { text }));
+        broadcast(panelEvent('turn_completed', { result }));
+      }
+      return;
+    }
+
     await appServer.startTurn(body.message);
     if (appServer.threadId) await store?.update?.({ threadId: appServer.threadId });
   }

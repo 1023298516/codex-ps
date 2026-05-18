@@ -4,6 +4,7 @@ const SAFE_AUTO_ALLOWED = new Set([
   'read_selection',
   'list_recent_codex_images',
   'create_new_layer',
+  'generate_and_place_image',
   'place_latest_codex_image',
   'rename_new_layer',
   'transform_new_or_selected_layer',

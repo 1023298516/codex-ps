@@ -28,6 +28,17 @@ export function createPhotoshopTools({ appServer, mode = 'safe-auto', protection
       });
     },
 
+    async generateAndPlaceImage(args = {}) {
+      allowed('generate_and_place_image');
+      return appServer.callMcpTool(PHOTOSHOP_SERVER, 'photoshop_ai_generate_and_place', {
+        prompt: args.prompt,
+        fitMode: args.fitMode || 'fit',
+        layerName: args.layerName || 'AI Generated Image',
+        size: args.size || '1024x1024',
+        quality: args.quality || 'auto'
+      });
+    },
+
     async deleteLayer(args = {}) {
       allowed('delete_layer');
       return appServer.callMcpTool(PHOTOSHOP_SERVER, 'photoshop_delete_layer', args);

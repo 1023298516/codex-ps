@@ -24,6 +24,23 @@ test('safe-auto imports latest Codex image through Photoshop MCP', async () => {
   });
 });
 
+test('safe-auto generates and places an image through Photoshop MCP', async () => {
+  const appServer = fakeAppServer();
+  const tools = createPhotoshopTools({ appServer, mode: 'safe-auto' });
+  await tools.generateAndPlaceImage({ prompt: '生成一只猪', fitMode: 'fit' });
+  assert.deepEqual(appServer.calls[0], {
+    server: 'photoshop',
+    tool: 'photoshop_ai_generate_and_place',
+    args: {
+      prompt: '生成一只猪',
+      fitMode: 'fit',
+      layerName: 'AI Generated Image',
+      size: '1024x1024',
+      quality: 'auto'
+    }
+  });
+});
+
 test('safe-auto blocks destructive actions', async () => {
   const tools = createPhotoshopTools({ appServer: fakeAppServer(), mode: 'safe-auto' });
   await assert.rejects(() => tools.deleteLayer({ layerId: 7 }), /delete_layer blocked in B safe-auto mode/);
