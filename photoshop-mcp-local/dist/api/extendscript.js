@@ -1154,11 +1154,53 @@ export const ExtendScriptSnippets = {
      * Play an action from Actions palette
      */
     playAction: (actionName, actionSetName) => `
-    app.doAction("${actionName.replace(/"/g, '\\"')}", "${actionSetName.replace(/"/g, '\\"')}");
+    var targetActionName = ${JSON.stringify(actionName)};
+    var targetActionSetName = ${JSON.stringify(actionSetName)};
+    var cTID = charIDToTypeID;
+
+    function actionExists(actionSetName, actionName) {
+      var setIndex = 1;
+      while (true) {
+        var setRef = new ActionReference();
+        setRef.putIndex(cTID('ASet'), setIndex);
+
+        var setDesc;
+        try {
+          setDesc = executeActionGet(setRef);
+        } catch (error) {
+          return false;
+        }
+
+        var currentSetName = setDesc.getString(cTID('Nm  '));
+        if (currentSetName === actionSetName) {
+          var actionCount = setDesc.hasKey(cTID('NmbC')) ? setDesc.getInteger(cTID('NmbC')) : 0;
+          for (var actionIndex = 1; actionIndex <= actionCount; actionIndex++) {
+            var actionRef = new ActionReference();
+            actionRef.putIndex(cTID('Actn'), actionIndex);
+            actionRef.putIndex(cTID('ASet'), setIndex);
+
+            var actionDesc = executeActionGet(actionRef);
+            var currentActionName = actionDesc.getString(cTID('Nm  '));
+            if (currentActionName === actionName) {
+              return true;
+            }
+          }
+          return false;
+        }
+
+        setIndex++;
+      }
+    }
+
+    if (!actionExists(targetActionSetName, targetActionName)) {
+      throw new Error('Action not found: "' + targetActionName + '" in set "' + targetActionSetName + '"');
+    }
+
+    app.doAction(targetActionName, targetActionSetName);
     
     return { 
-      action: '${actionName}',
-      set: '${actionSetName}'
+      action: targetActionName,
+      set: targetActionSetName
     };
   `,
     /**
