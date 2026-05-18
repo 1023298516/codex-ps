@@ -3,6 +3,10 @@ function toTurnInput(input) {
   return [{ type: 'text', text: String(input ?? '') }];
 }
 
+function isMissingThreadError(error) {
+  return /thread not found/i.test(error?.message || '');
+}
+
 export function createAppServerAdapter({
   client,
   threadId = null,
@@ -39,10 +43,21 @@ export function createAppServerAdapter({
 
     async startTurn(input) {
       const threadIdForTurn = await this.ensureThread();
-      return client.request('turn/start', {
-        threadId: threadIdForTurn,
-        input: toTurnInput(input)
-      });
+      const turnInput = toTurnInput(input);
+      try {
+        return await client.request('turn/start', {
+          threadId: threadIdForTurn,
+          input: turnInput
+        });
+      } catch (error) {
+        if (!isMissingThreadError(error)) throw error;
+        activeThreadId = null;
+        const recoveredThreadId = await this.ensureThread();
+        return client.request('turn/start', {
+          threadId: recoveredThreadId,
+          input: turnInput
+        });
+      }
     },
 
     async interruptTurn() {

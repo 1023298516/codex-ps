@@ -44,6 +44,38 @@ test('startTurn sends app-server text input items and thread id', async () => {
   });
 });
 
+test('startTurn recovers when a persisted thread is missing', async () => {
+  const calls = [];
+  let failedOnce = false;
+  const client = {
+    calls,
+    async request(method, params) {
+      calls.push({ method, params });
+      if (method === 'initialize') return { serverInfo: { name: 'codex-app-server' } };
+      if (method === 'thread/start') return { thread: { id: 'thread-new' } };
+      if (method === 'turn/start' && params.threadId === 'thread-old' && !failedOnce) {
+        failedOnce = true;
+        throw new Error('thread not found: thread-old');
+      }
+      if (method === 'turn/start') return { turn: { id: 'turn-1' } };
+      return {};
+    }
+  };
+
+  const adapter = createAppServerAdapter({ client, threadId: 'thread-old' });
+  await adapter.startTurn('hello');
+
+  assert.equal(adapter.threadId, 'thread-new');
+  assert.deepEqual(client.calls.map(call => call.method), [
+    'initialize',
+    'turn/start',
+    'thread/start',
+    'turn/start'
+  ]);
+  assert.equal(client.calls[1].params.threadId, 'thread-old');
+  assert.equal(client.calls[3].params.threadId, 'thread-new');
+});
+
 test('callMcpTool forwards server, tool, and arguments', async () => {
   const client = fakeClient();
   const adapter = createAppServerAdapter({ client });

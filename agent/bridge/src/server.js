@@ -41,6 +41,7 @@ export function createBridgeServer({ appServer, store, host = '127.0.0.1' } = {}
     await store?.update?.({ mode });
     broadcast(panelEvent('user_message', { text: body.message, mode }));
     await appServer.startTurn(body.message);
+    if (appServer.threadId) await store?.update?.({ threadId: appServer.threadId });
   }
 
   const listener = http.createServer(async (req, res) => {

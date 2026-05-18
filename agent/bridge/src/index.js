@@ -5,6 +5,7 @@ import { createStore } from './store.js';
 import { createBridgeServer } from './server.js';
 import { createJsonRpcClient } from './json-rpc-client.js';
 import { createAppServerAdapter } from './app-server-adapter.js';
+import { normalizeAppServerNotification } from './events.js';
 
 const port = Number(process.env.CODEX_PS_BRIDGE_PORT || 17891);
 const statePath = process.env.CODEX_PS_STATE_PATH || join(homedir(), '.codex-ps-agent', 'state.json');
@@ -19,6 +20,10 @@ appServerProcess.stderr.on('data', chunk => console.error(chunk.toString('utf8')
 const client = createJsonRpcClient({ input: appServerProcess.stdout, output: appServerProcess.stdin });
 const appServer = createAppServerAdapter({ client, threadId: state.threadId });
 const server = createBridgeServer({ appServer, store });
+
+client.on('notification', notification => {
+  server.broadcast(normalizeAppServerNotification(notification));
+});
 
 await server.listen(port);
 console.log(`Codex PS bridge listening on http://127.0.0.1:${port}`);

@@ -15,6 +15,14 @@ test('normalizes turn text delta notifications', () => {
   assert.deepEqual(event, { type: 'assistant_delta', timestamp: 2000, text: 'hello' });
 });
 
+test('normalizes app-server agent message deltas', () => {
+  const event = normalizeAppServerNotification({
+    method: 'item/agentMessage/delta',
+    params: { delta: 'PS 面板链路测试成功' }
+  }, 2500);
+  assert.deepEqual(event, { type: 'assistant_delta', timestamp: 2500, text: 'PS 面板链路测试成功' });
+});
+
 test('normalizes tool call notifications', () => {
   const event = normalizeAppServerNotification({
     method: 'mcpServer/tool/call',

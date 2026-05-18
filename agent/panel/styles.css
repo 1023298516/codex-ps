@@ -77,6 +77,12 @@ textarea {
   background: #303743;
 }
 
+.event.assistant {
+  border-color: rgba(20, 184, 166, 0.32);
+  background: rgba(20, 184, 166, 0.08);
+  white-space: pre-wrap;
+}
+
 .event.tool_event {
   border-color: rgba(245, 158, 11, 0.34);
   background: rgba(245, 158, 11, 0.08);

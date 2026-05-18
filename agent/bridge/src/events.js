@@ -6,7 +6,11 @@ export function normalizeAppServerNotification(message, timestamp = Date.now()) 
   const method = message?.method || '';
   const params = message?.params || {};
 
-  if (method === 'turn/output_text/delta' || method === 'turn/output_text_delta') {
+  if (
+    method === 'turn/output_text/delta' ||
+    method === 'turn/output_text_delta' ||
+    method === 'item/agentMessage/delta'
+  ) {
     return panelEvent('assistant_delta', { text: params.delta || params.text || '' }, timestamp);
   }
 

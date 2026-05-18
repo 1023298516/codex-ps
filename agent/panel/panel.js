@@ -6,9 +6,28 @@ let reconnectTimer = null;
 let log = null;
 let connection = null;
 let messageInput = null;
+let activeAssistantEvent = null;
 
 function addEvent(event) {
   if (!log) return;
+  if (event.type === 'raw_event') return;
+
+  if (event.type === 'assistant_delta') {
+    if (!activeAssistantEvent) {
+      activeAssistantEvent = document.createElement('div');
+      activeAssistantEvent.className = 'event assistant';
+      activeAssistantEvent.textContent = '';
+      log.appendChild(activeAssistantEvent);
+    }
+    activeAssistantEvent.textContent += event.text || '';
+    log.scrollTop = log.scrollHeight;
+    return;
+  }
+
+  if (event.type === 'turn_completed' || event.type === 'error' || event.type === 'user') {
+    activeAssistantEvent = null;
+  }
+
   const node = document.createElement('div');
   node.className = `event ${event.type || 'status'}`;
   node.textContent = event.text || event.message || `${event.tool || event.type || 'event'}`;

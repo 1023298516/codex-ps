@@ -28,6 +28,17 @@ test('panel uses WebSocket transport for UXP local bridge access', async () => {
   assert.doesNotMatch(`${html}\n${js}`, /EventSource|http:\/\/127\.0\.0\.1:17891/);
 });
 
+test('panel coalesces streaming assistant text into one event', async () => {
+  const js = await readFile('agent/panel/panel.js', 'utf8');
+  assert.match(js, /event\.type === 'assistant_delta'/);
+  assert.match(js, /activeAssistantEvent\.textContent \+= event\.text/);
+});
+
+test('panel hides raw app-server transport events', async () => {
+  const js = await readFile('agent/panel/panel.js', 'utf8');
+  assert.match(js, /event\.type === 'raw_event'/);
+});
+
 test('panel manifest icon files exist for UXP loading', async () => {
   const manifest = JSON.parse(await readFile('agent/panel/manifest.json', 'utf8'));
   const iconPaths = [

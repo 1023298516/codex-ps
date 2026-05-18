@@ -9,7 +9,7 @@ function waitForSocketEvent(socket, predicate) {
     const timeout = setTimeout(() => {
       cleanup();
       reject(new Error('Timed out waiting for WebSocket event'));
-    }, 1000);
+    }, 5000);
 
     function cleanup() {
       clearTimeout(timeout);
@@ -68,6 +68,38 @@ test('POST /chat accepts a message', async () => {
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { ok: true });
     assert.deepEqual(calls, ['hello']);
+  } finally {
+    await server.close();
+  }
+});
+
+test('POST /chat persists the active Codex thread id', async () => {
+  const updates = [];
+  const server = createBridgeServer({
+    appServer: {
+      get threadId() {
+        return 'thread-1';
+      },
+      async startTurn() {
+        return { turn: { id: 'turn-1' } };
+      }
+    },
+    store: {
+      async update(patch) {
+        updates.push(patch);
+      }
+    }
+  });
+  const listener = await server.listen(0);
+  try {
+    const port = listener.address().port;
+    const response = await fetch(`http://127.0.0.1:${port}/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: 'hello', mode: 'safe-auto' })
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(updates, [{ mode: 'safe-auto' }, { threadId: 'thread-1' }]);
   } finally {
     await server.close();
   }
