@@ -1,5 +1,25 @@
 const BRIDGE_SOCKET_URL = 'ws://127.0.0.1:17891/socket';
 const BRIDGE_HTTP_URL = 'http://127.0.0.1:17891';
+const MAX_TECHNICAL_EVENT_LENGTH = 520;
+const MAX_TECHNICAL_EVENT_LINES = 7;
+const TOOL_LABELS = {
+  image_generation: {
+    started: '正在生成图片...',
+    completed: '图片已生成，正在准备导入。'
+  },
+  place_generated_codex_image: {
+    started: '正在导入刚生成的图片...'
+  },
+  place_latest_codex_image: {
+    started: '正在导入最新 Codex 图片...'
+  },
+  read_document: {
+    started: '正在读取当前画布...'
+  },
+  read_layers: {
+    started: '正在读取当前图层...'
+  }
+};
 
 let mode = 'safe-auto';
 let socket = null;
@@ -24,6 +44,60 @@ let galleryImages = [];
 let selectedImagePaths = new Set();
 let pendingImportPaths = [];
 
+function isTechnicalText(text) {
+  return /imagePath|filePath|LayerKind|DocumentMode|Result:|\/Users\/|\{.*[:=].*\}/s.test(text);
+}
+
+function shortenLongLine(line) {
+  if (line.length <= 110) return line;
+  return `${line.slice(0, 92).trim()}...`;
+}
+
+function compactFilePaths(text) {
+  return text.replace(/\/Users\/[^\s"']+/g, match => {
+    const filename = match.split('/').pop();
+    if (!filename) return match;
+    if (/\.(png|jpe?g|webp|gif)$/i.test(filename)) return filename;
+    return `.../${filename}`;
+  });
+}
+
+function compactDisplayText(value) {
+  let text = String(value || '');
+  if (!isTechnicalText(text)) return text;
+
+  text = compactFilePaths(text)
+    .replace(/Result:\s*"?\(\{[\s\S]*/i, '结果：已完成')
+    .replace(/Image placed successfully:/i, '已放入画布：');
+
+  const lines = text
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .filter(line => !/^imagePath:/i.test(line))
+    .map(shortenLongLine);
+
+  const clippedLines = lines.slice(0, MAX_TECHNICAL_EVENT_LINES);
+  let compacted = clippedLines.join('\n');
+  if (lines.length > MAX_TECHNICAL_EVENT_LINES || compacted.length > MAX_TECHNICAL_EVENT_LENGTH) {
+    compacted = `${compacted.slice(0, MAX_TECHNICAL_EVENT_LENGTH).trim()}\n... 已隐藏较长技术细节`;
+  }
+  return compacted;
+}
+
+function toolEventText(event) {
+  const label = TOOL_LABELS[event.tool]?.[event.status] || TOOL_LABELS[event.tool]?.started;
+  if (label) return label;
+  if (event.status === 'started') return `正在执行：${event.tool || '工具'}`;
+  if (event.status === 'completed') return `已完成：${event.tool || '工具'}`;
+  return event.tool || event.type || 'event';
+}
+
+function eventDisplayText(event) {
+  if (event.type === 'tool_event') return toolEventText(event);
+  return compactDisplayText(event.text || event.message || `${event.tool || event.type || 'event'}`);
+}
+
 function addEvent(event) {
   if (!log) return;
   if (event.type === 'raw_event') return;
@@ -34,20 +108,27 @@ function addEvent(event) {
       activeAssistantEvent = document.createElement('div');
       activeAssistantEvent.className = 'event assistant';
       activeAssistantEvent.textContent = '';
+      activeAssistantEvent.dataset.rawText = '';
       log.appendChild(activeAssistantEvent);
     }
-    activeAssistantEvent.textContent += event.text || '';
+    activeAssistantEvent.dataset.rawText += event.text || '';
+    activeAssistantEvent.textContent = compactDisplayText(activeAssistantEvent.dataset.rawText);
     log.scrollTop = log.scrollHeight;
     return;
   }
 
-  if (event.type === 'turn_completed' || event.type === 'error' || event.type === 'user') {
+  if (event.type === 'turn_completed') {
+    activeAssistantEvent = null;
+    return;
+  }
+
+  if (event.type === 'error' || event.type === 'user') {
     activeAssistantEvent = null;
   }
 
   const node = document.createElement('div');
   node.className = `event ${event.type || 'status'}`;
-  node.textContent = event.text || event.message || `${event.tool || event.type || 'event'}`;
+  node.textContent = eventDisplayText(event);
   log.appendChild(node);
   log.scrollTop = log.scrollHeight;
 }

@@ -32,7 +32,8 @@ test('panel uses WebSocket transport for UXP local bridge access', async () => {
 test('panel coalesces streaming assistant text into one event', async () => {
   const js = await readFile('agent/panel/panel.js', 'utf8');
   assert.match(js, /event\.type === 'assistant_delta'/);
-  assert.match(js, /activeAssistantEvent\.textContent \+= event\.text/);
+  assert.match(js, /activeAssistantEvent\.dataset\.rawText \+= event\.text/);
+  assert.match(js, /activeAssistantEvent\.textContent = compactDisplayText/);
 });
 
 test('panel hides raw app-server transport events', async () => {
@@ -63,6 +64,14 @@ test('panel can request gallery images and import multiple selections', async ()
   assert.match(js, /selectedImagePaths/);
   assert.match(js, /openImportPreview/);
   assert.match(js, /confirmImportPreview/);
+});
+
+test('panel compacts verbose technical output before rendering logs', async () => {
+  const js = await readFile('agent/panel/panel.js', 'utf8');
+  assert.match(js, /compactDisplayText/);
+  assert.match(js, /MAX_TECHNICAL_EVENT_LENGTH/);
+  assert.match(js, /TOOL_LABELS/);
+  assert.match(js, /已隐藏较长技术细节/);
 });
 
 test('panel manifest icon files exist for UXP loading', async () => {

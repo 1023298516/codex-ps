@@ -432,8 +432,12 @@ test('WebSocket /socket imports selected gallery images', async () => {
     await writeFile(secondPath, 'second', 'utf8');
     await waitForOpenSocket(socket);
 
+    const summaryPromise = waitForSocketEvent(socket, event => (
+      event.type === 'assistant_delta' && /已导入 Photoshop/.test(event.text || '')
+    ));
     socket.send(JSON.stringify({ type: 'import_images', paths: [firstPath, secondPath], mode: 'safe-auto' }));
     await waitForCondition(() => calls.length === 4);
+    const summary = await summaryPromise;
 
     assert.deepEqual(calls, [{
       server: 'photoshop',
@@ -452,6 +456,9 @@ test('WebSocket /socket imports selected gallery images', async () => {
       tool: 'photoshop_fit_layer_to_document',
       args: { fillDocument: false }
     }]);
+    assert.match(summary.text, /first\.png/);
+    assert.doesNotMatch(summary.text, /imagePath|filePath|Result:|\/tmp\//);
+    assert.ok(summary.text.length < 160);
   } finally {
     socket.close();
     await server.close();

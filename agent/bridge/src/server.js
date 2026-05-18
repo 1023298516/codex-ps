@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { basename } from 'node:path';
 import { WebSocketServer } from 'ws';
 import { normalizeAppServerNotification, panelEvent, serializeSse } from './events.js';
 import { normalizeMode } from './policy.js';
@@ -40,6 +41,17 @@ function textFromToolResult(result) {
     if (text) return text;
   }
   return JSON.stringify(result);
+}
+
+function shortenTechnicalText(text, maxLength = 180) {
+  const value = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!value) return '没有返回更多错误信息。';
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength).trim()}...`;
+}
+
+function imageFileLabel(filePath) {
+  return basename(filePath || '') || 'Codex 图片';
 }
 
 function toolResultMentions(result, pattern) {
@@ -111,36 +123,37 @@ export function createBridgeServer({
 
     if (toolResultMentions(placeResult, /No active document/i)) {
       const openResult = await tools.openImage({ filePath: image.path });
-      const text = [
-        generated
-          ? 'Codex 图片已生成，当前没有打开画布，已作为新文档打开'
-          : '已找到最新 Codex 图片，当前没有打开画布，已作为新文档打开',
-        `imagePath: ${image.path}`,
-        textFromToolResult(openResult)
-      ].join('\n');
+      const label = imageFileLabel(image.path);
+      const text = generated
+        ? `Codex 图片已生成：${label}\n当前没有打开画布，已作为新 Photoshop 文档打开。`
+        : `最新 Codex 图片已找到：${label}\n当前没有打开画布，已作为新 Photoshop 文档打开。`;
       await store?.appendOperation?.({ type: 'tool_event', tool: `open_${actionName}`, result: text });
-      broadcast(panelEvent('assistant_delta', { text }));
+      if (openResult?.isError) {
+        broadcast(panelEvent('error', {
+          message: `图片已生成，但打开新文档失败：${label}\n${shortenTechnicalText(textFromToolResult(openResult))}`,
+          details: openResult
+        }));
+      } else {
+        broadcast(panelEvent('assistant_delta', { text }));
+      }
       return;
     }
 
     if (placeResult?.isError) {
-      const text = [
-        generated ? 'Codex 图片已生成，但导入 Photoshop 时失败' : '最新 Codex 图片导入 Photoshop 时失败',
-        `imagePath: ${image.path}`,
-        textFromToolResult(placeResult)
-      ].join('\n');
+      const label = imageFileLabel(image.path);
+      const text = generated
+        ? `Codex 图片已生成，但导入 Photoshop 失败：${label}\n${shortenTechnicalText(textFromToolResult(placeResult))}`
+        : `最新 Codex 图片导入 Photoshop 失败：${label}\n${shortenTechnicalText(textFromToolResult(placeResult))}`;
       await store?.appendOperation?.({ type: 'tool_event', tool: actionName, result: text });
       broadcast(panelEvent('error', { message: text, details: placeResult }));
       return;
     }
 
     const fitResult = await tools.fitActiveLayerToDocument({ fillDocument: false });
-    const text = [
-      generated ? 'Codex 图片已导入 Photoshop' : '最新 Codex 图片已导入 Photoshop',
-      `imagePath: ${image.path}`,
-      textFromToolResult(placeResult),
-      textFromToolResult(fitResult)
-    ].join('\n');
+    const label = imageFileLabel(image.path);
+    const text = fitResult?.isError
+      ? `${generated ? 'Codex 图片已导入 Photoshop' : '最新 Codex 图片已导入 Photoshop'}：${label}\n图片已放入画布，但适配画布失败：${shortenTechnicalText(textFromToolResult(fitResult))}`
+      : `${generated ? 'Codex 图片已导入 Photoshop' : '最新 Codex 图片已导入 Photoshop'}：${label}\n已作为智能对象放入当前画布，并适配到画布大小。`;
     await store?.appendOperation?.({ type: 'tool_event', tool: actionName, result: text });
     broadcast(panelEvent('assistant_delta', { text }));
   }
