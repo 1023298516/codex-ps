@@ -10,17 +10,18 @@ body {
   font: 12px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-button,
 textarea {
   font: inherit;
 }
 
 .panel {
-  height: 100vh;
-  display: grid;
-  grid-template-rows: auto auto 1fr auto auto;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
   background: #202327;
   border: 1px solid #30343a;
+  overflow: hidden;
 }
 
 .topbar {
@@ -39,35 +40,28 @@ textarea {
   font-size: 11px;
 }
 
-.topbar button,
-.composer button,
-.quick-actions button,
-.mode-switch button {
-  border: 1px solid #454b55;
-  border-radius: 8px;
-  background: #30343a;
-  color: #e5e7eb;
-  min-height: 32px;
-  padding: 0 10px;
-}
-
 .mode-switch {
   padding: 8px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
   gap: 6px;
   border-bottom: 1px solid #30343a;
 }
 
-.mode-switch button.active {
+.mode-switch sp-button {
+  flex: 1 1 0;
+}
+
+.mode-switch sp-button.active {
   background: #0f766e;
   border-color: #14b8a6;
   color: #ffffff;
 }
 
 .log {
+  flex: 1 1 auto;
   padding: 10px;
   overflow-y: auto;
+  min-height: 120px;
 }
 
 .event {
@@ -97,23 +91,27 @@ textarea {
 
 .quick-actions {
   padding: 8px;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
   gap: 6px;
   border-top: 1px solid #30343a;
 }
 
+.quick-actions sp-button {
+  flex: 1 1 0;
+}
+
 .composer {
   padding: 10px;
-  display: grid;
-  grid-template-columns: 1fr auto;
+  display: flex;
+  align-items: stretch;
   gap: 8px;
   border-top: 1px solid #30343a;
   background: #1d2024;
 }
 
 textarea {
-  width: 100%;
+  flex: 1 1 auto;
+  min-height: 58px;
   resize: none;
   border: 1px solid #3a3f46;
   background: #15171a;
@@ -122,7 +120,8 @@ textarea {
   padding: 10px;
 }
 
-.composer button {
+.composer sp-button {
+  flex: 0 0 auto;
   background: #0f766e;
   border-color: #14b8a6;
   color: #ffffff;

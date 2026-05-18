@@ -6,33 +6,35 @@
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
-    <main class="panel">
-      <header class="topbar">
+    <div class="panel">
+      <div class="topbar">
         <div>
           <strong>Codex PS</strong>
           <span id="connection">Disconnected</span>
         </div>
-        <button id="interrupt" title="Stop current run">Stop</button>
-      </header>
+        <sp-button id="interrupt" size="s">Stop</sp-button>
+      </div>
 
-      <section class="mode-switch" aria-label="Execution mode">
-        <button data-mode="safe-auto" class="active">B 安全自动</button>
-        <button data-mode="full-auto">C 全自动</button>
-      </section>
+      <div class="mode-switch">
+        <sp-button data-mode="safe-auto" class="active" size="s">B 安全自动</sp-button>
+        <sp-button data-mode="full-auto" size="s">C 全自动</sp-button>
+      </div>
 
-      <section id="log" class="log" aria-live="polite"></section>
+      <div id="log" class="log">
+        <div class="event status">面板已打开，正在连接 Codex bridge...</div>
+      </div>
 
-      <section class="quick-actions">
-        <button id="import-latest">导入最新图</button>
-        <button id="read-canvas">读取画布</button>
-        <button id="read-layers">读取图层</button>
-      </section>
+      <div class="quick-actions">
+        <sp-button id="import-latest" size="s">导入最新图</sp-button>
+        <sp-button id="read-canvas" size="s">读取画布</sp-button>
+        <sp-button id="read-layers" size="s">读取图层</sp-button>
+      </div>
 
-      <form id="composer" class="composer">
+      <div id="composer" class="composer">
         <textarea id="message" rows="3" placeholder="描述你要生成、导入或修改的画面..."></textarea>
-        <button type="submit">发送</button>
-      </form>
-    </main>
-    <script type="module" src="./panel.js"></script>
+        <sp-button id="send" size="s">发送</sp-button>
+      </div>
+    </div>
+    <script src="./panel.js"></script>
   </body>
 </html>

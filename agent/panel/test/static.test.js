@@ -1,15 +1,38 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { access } from 'node:fs/promises';
 
 test('panel manifest declares a Photoshop panel', async () => {
   const manifest = JSON.parse(await readFile('agent/panel/manifest.json', 'utf8'));
+  assert.equal(manifest.id, 'com.codex.ps.agent.uxp');
+  assert.equal(manifest.manifestVersion, 4);
   assert.equal(manifest.host[0].app, 'PS');
   assert.equal(manifest.entrypoints[0].type, 'panel');
+  assert.equal(manifest.entrypoints[0].id, 'codexps');
+  assert.ok(manifest.entrypoints[0].icons.length > 0);
+  assert.ok(manifest.icons.length > 0);
+  assert.equal(manifest.requiredPermissions, undefined);
 });
 
 test('panel copy does not mention template slot mapping', async () => {
   const html = await readFile('agent/panel/index.html', 'utf8');
   const js = await readFile('agent/panel/panel.js', 'utf8');
   assert.doesNotMatch(`${html}\n${js}`, /模板|插槽|IMG_MAIN|LOGO/);
+});
+
+test('panel uses WebSocket transport for UXP local bridge access', async () => {
+  const html = await readFile('agent/panel/index.html', 'utf8');
+  const js = await readFile('agent/panel/panel.js', 'utf8');
+  assert.match(js, /ws:\/\/127\.0\.0\.1:17891\/socket/);
+  assert.doesNotMatch(`${html}\n${js}`, /EventSource|http:\/\/127\.0\.0\.1:17891/);
+});
+
+test('panel manifest icon files exist for UXP loading', async () => {
+  const manifest = JSON.parse(await readFile('agent/panel/manifest.json', 'utf8'));
+  const iconPaths = [
+    ...manifest.entrypoints.flatMap(entry => entry.icons?.map(icon => icon.path) || []),
+    ...manifest.icons.map(icon => icon.path)
+  ];
+  await Promise.all(iconPaths.map(path => access(`agent/panel/${path}`)));
 });

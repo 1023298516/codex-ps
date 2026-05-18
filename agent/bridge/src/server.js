@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { WebSocketServer } from 'ws';
 import { panelEvent, serializeSse } from './events.js';
 import { normalizeMode } from './policy.js';
 
@@ -20,9 +21,26 @@ function sendJson(res, status, data) {
 
 export function createBridgeServer({ appServer, store, host = '127.0.0.1' } = {}) {
   const sseClients = new Set();
+  const webSocketClients = new Set();
+  const webSocketServer = new WebSocketServer({ noServer: true });
 
   function broadcast(event) {
     for (const res of sseClients) res.write(serializeSse(event));
+    const payload = JSON.stringify(event);
+    for (const socket of webSocketClients) {
+      if (socket.readyState === socket.OPEN) socket.send(payload);
+    }
+  }
+
+  function sendSocket(socket, event) {
+    if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(event));
+  }
+
+  async function handlePanelChat(body) {
+    const mode = normalizeMode(body.mode);
+    await store?.update?.({ mode });
+    broadcast(panelEvent('user_message', { text: body.message, mode }));
+    await appServer.startTurn(body.message);
   }
 
   const listener = http.createServer(async (req, res) => {
@@ -52,10 +70,7 @@ export function createBridgeServer({ appServer, store, host = '127.0.0.1' } = {}
 
       if (req.method === 'POST' && req.url === '/chat') {
         const body = await readJson(req);
-        const mode = normalizeMode(body.mode);
-        await store?.update?.({ mode });
-        broadcast(panelEvent('user_message', { text: body.message, mode }));
-        await appServer.startTurn(body.message);
+        await handlePanelChat(body);
         sendJson(res, 200, { ok: true });
         return;
       }
@@ -67,11 +82,52 @@ export function createBridgeServer({ appServer, store, host = '127.0.0.1' } = {}
     }
   });
 
+  listener.on('upgrade', (req, socket, head) => {
+    if (req.url !== '/socket') {
+      socket.destroy();
+      return;
+    }
+
+    webSocketServer.handleUpgrade(req, socket, head, ws => {
+      webSocketServer.emit('connection', ws, req);
+    });
+  });
+
+  webSocketServer.on('connection', socket => {
+    webSocketClients.add(socket);
+    sendSocket(socket, panelEvent('status', { message: 'Connected to Codex PS bridge' }));
+
+    socket.on('message', async data => {
+      try {
+        const body = JSON.parse(data.toString('utf8'));
+        if (body.type === 'chat') {
+          await handlePanelChat(body);
+          sendSocket(socket, panelEvent('status', { message: 'Message sent to Codex' }));
+          return;
+        }
+
+        if (body.type === 'interrupt') {
+          await appServer.interruptTurn?.();
+          broadcast(panelEvent('status', { message: 'Stop requested' }));
+          return;
+        }
+
+        sendSocket(socket, panelEvent('error', { message: `Unknown panel command: ${body.type || 'missing type'}` }));
+      } catch (error) {
+        sendSocket(socket, panelEvent('error', { message: error.message }));
+      }
+    });
+
+    socket.on('close', () => webSocketClients.delete(socket));
+  });
+
   return {
     listen(port = 17891) {
       return new Promise(resolve => listener.listen(port, host, () => resolve(listener)));
     },
     close() {
+      for (const socket of webSocketClients) socket.close();
+      webSocketServer.close();
       return new Promise(resolve => listener.close(resolve));
     },
     broadcast
