@@ -1,0 +1,84 @@
+{
+  "name": "@alisaitteke/photoshop-mcp",
+  "version": "1.1.2",
+  "description": "MCP server for Adobe Photoshop automation - control Photoshop from AI assistants",
+  "main": "dist/index.js",
+  "type": "module",
+  "bin": {
+    "photoshop-mcp": "dist/index.js",
+    "photoshop-mcp-ui": "dist/ui/cli.js"
+  },
+  "files": [
+    "dist",
+    "web/dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev": "tsc --watch",
+    "dev:ui": "concurrently -n server,web -c blue,green \"npm:dev:ui:server\" \"npm:dev:ui:web\"",
+    "dev:ui:server": "tsx watch src/ui/cli.ts --port 5174 --no-open",
+    "dev:ui:web": "npm --prefix web run dev",
+    "build": "npm run build:server && npm run build:web",
+    "build:server": "tsc",
+    "build:web": "npm --prefix web ci --no-audit --no-fund && npm --prefix web run build",
+    "start": "node dist/index.js",
+    "start:ui": "node dist/ui/cli.js",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "photoshop",
+    "adobe",
+    "automation",
+    "ai",
+    "model-context-protocol",
+    "image-editing"
+  ],
+  "author": "Ali Sait Teke",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alisaitteke/photoshop-mcp.git"
+  },
+  "homepage": "https://github.com/alisaitteke/photoshop-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/alisaitteke/photoshop-mcp/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.75",
+    "@ai-sdk/google": "^3.0.67",
+    "@ai-sdk/mcp": "^1.0.40",
+    "@ai-sdk/openai": "^3.0.61",
+    "@hono/node-server": "^1.13.7",
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "@openrouter/ai-sdk-provider": "^2.9.0",
+    "ai": "^6.0.175",
+    "better-sqlite3": "^12.9.0",
+    "get-port": "^7.1.0",
+    "hono": "^4.6.14",
+    "open": "^10.1.0"
+  },
+  "mcpName": "io.github.alisaitteke/photoshop-mcp",
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.10.5",
+    "@typescript-eslint/eslint-plugin": "^8.20.0",
+    "@typescript-eslint/parser": "^8.20.0",
+    "concurrently": "^9.1.2",
+    "eslint": "^9.18.0",
+    "prettier": "^3.4.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,17 @@
+.DS_Store
+
+# Dependencies
+node_modules/
+photoshop-mcp-local/node_modules/
+
+# Temporary outputs and generated test artifacts
+tmp/
+.superpowers/
+
+# Logs and local runtime files
+*.log
+*.pid
+
+# Environment files
+.env
+.env.*
