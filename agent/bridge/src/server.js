@@ -1,10 +1,18 @@
 import http from 'node:http';
-import { basename } from 'node:path';
+import { mkdir } from 'node:fs/promises';
+import { basename, dirname, join } from 'node:path';
 import { WebSocketServer } from 'ws';
 import { normalizeAppServerNotification, panelEvent, serializeSse } from './events.js';
 import { normalizeMode } from './policy.js';
 import { createPhotoshopTools } from './photoshop-tools.js';
 import { latestCodexImage, listCodexImages, readCodexImageFile, waitForLatestCodexImage } from './codex-images.js';
+import {
+  DEFAULT_PRODUCT_REFERENCE_DIR,
+  buildProductReplacementInput,
+  listProductReferences,
+  readProductReferenceFile,
+  saveProductReference
+} from './product-replacement.js';
 
 async function readJson(req) {
   const chunks = [];
@@ -58,6 +66,21 @@ function toolResultMentions(result, pattern) {
   return pattern.test(textFromToolResult(result));
 }
 
+function targetFromToolResult(result) {
+  const text = textFromToolResult(result);
+  const match = text.match(/left[:=]\s*([-\d.]+)[\s\S]*?top[:=]\s*([-\d.]+)[\s\S]*?right[:=]\s*([-\d.]+)[\s\S]*?bottom[:=]\s*([-\d.]+)/i);
+  if (!match) return { text };
+  return {
+    text,
+    bounds: {
+      left: Number(match[1]),
+      top: Number(match[2]),
+      right: Number(match[3]),
+      bottom: Number(match[4])
+    }
+  };
+}
+
 function directIntentForMessage(message = '') {
   const text = String(message).trim();
   if (/读取.*(画布|文档信息|文档)|读.*(画布|文档信息|文档)/.test(text)) return { action: 'read_document' };
@@ -94,12 +117,15 @@ export function createBridgeServer({
   store,
   host = '127.0.0.1',
   codexImageDir,
+  productReferenceDir = DEFAULT_PRODUCT_REFERENCE_DIR,
   imageWaitTimeoutMs = 15000
 } = {}) {
   const sseClients = new Set();
   const webSocketClients = new Set();
   const webSocketServer = new WebSocketServer({ noServer: true });
   const pendingCodexImageImports = [];
+  const pendingProductReplacementPreviews = [];
+  let latestProductReplacementPreview = null;
 
   function broadcast(event) {
     for (const res of sseClients) res.write(serializeSse(event));
@@ -190,6 +216,24 @@ export function createBridgeServer({
     return listCodexImages({ searchDir: codexImageDir });
   }
 
+  async function listProductReferenceImages() {
+    return listProductReferences({ referenceDir: productReferenceDir });
+  }
+
+  async function productReferencesForPaths(paths = []) {
+    const allReferences = await listProductReferenceImages();
+    const selectedPaths = Array.isArray(paths) && paths.length > 0
+      ? new Set(paths)
+      : new Set(allReferences.map(reference => reference.path));
+    const references = [];
+    for (const reference of allReferences) {
+      if (!selectedPaths.has(reference.path)) continue;
+      await readProductReferenceFile({ referenceDir: productReferenceDir, filePath: reference.path });
+      references.push(reference);
+    }
+    return references;
+  }
+
   async function importGalleryImages(paths = [], mode = 'safe-auto') {
     const normalizedMode = normalizeMode(mode);
     if (!Array.isArray(paths) || paths.length === 0) {
@@ -207,6 +251,102 @@ export function createBridgeServer({
     }
 
     broadcast(panelEvent('assistant_delta', { text: `已导入 ${paths.length} 张图库图片到 Photoshop。` }));
+  }
+
+  async function createProductTarget(mode = 'safe-auto') {
+    const tools = createPhotoshopTools({ appServer, mode: normalizeMode(mode) });
+    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'create_product_target_layer', status: 'started' }));
+    const result = await tools.createProductTargetLayer();
+    if (result?.isError) {
+      broadcast(panelEvent('error', { message: shortenTechnicalText(textFromToolResult(result)), details: result }));
+      return;
+    }
+    broadcast(panelEvent('assistant_delta', { text: '已新建目标图层：圈选目标组 / 目标 01。可以在 Photoshop 里移动或缩放后再读取。' }));
+  }
+
+  async function readProductTarget(mode = 'safe-auto') {
+    const tools = createPhotoshopTools({ appServer, mode: normalizeMode(mode) });
+    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'read_product_target_layer', status: 'started' }));
+    const result = await tools.readProductTargetLayer();
+    if (result?.isError) {
+      broadcast(panelEvent('error', { message: shortenTechnicalText(textFromToolResult(result)), details: result }));
+      return null;
+    }
+    broadcast(panelEvent('assistant_delta', { text: '已读取目标图层：目标 01。后续会按这个区域生成替换融合预览。' }));
+    return targetFromToolResult(result);
+  }
+
+  async function generateProductReplacementPreview(body = {}) {
+    const mode = normalizeMode(body.mode);
+    const references = await productReferencesForPaths(body.referencePaths);
+    if (references.length === 0) {
+      broadcast(panelEvent('error', { message: '请先上传至少 1 张产品参考图，建议上传 4-5 张多方位图片。' }));
+      return;
+    }
+
+    const tools = createPhotoshopTools({ appServer, mode });
+    const canvasPath = join(productReferenceDir, 'canvas-exports', `detail-page-${Date.now()}.png`);
+    await mkdir(dirname(canvasPath), { recursive: true });
+    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'export_canvas', status: 'started' }));
+    const exportResult = await tools.exportCanvasPng({ outputPath: canvasPath });
+    if (exportResult?.isError) {
+      broadcast(panelEvent('error', { message: shortenTechnicalText(textFromToolResult(exportResult)), details: exportResult }));
+      return;
+    }
+
+    const targetResult = await tools.readProductTargetLayer();
+    if (targetResult?.isError) {
+      broadcast(panelEvent('error', { message: '没有找到目标图层，请先新建或手动画出“目标 01”。', details: targetResult }));
+      return;
+    }
+
+    const startedAtMs = Date.now();
+    pendingProductReplacementPreviews.push({ startedAtMs, mode, canvasPath });
+    broadcast(panelEvent('tool_event', { server: 'codex', tool: 'product_replacement_preview', status: 'started' }));
+    await appServer.startTurn(buildProductReplacementInput({
+      canvasPath,
+      target: targetFromToolResult(targetResult),
+      references
+    }));
+    if (appServer.threadId) await store?.update?.({ threadId: appServer.threadId });
+  }
+
+  async function finishProductReplacementPreview(request) {
+    const image = await waitForLatestCodexImage({
+      searchDir: codexImageDir,
+      afterMs: request.startedAtMs,
+      timeoutMs: imageWaitTimeoutMs
+    });
+    if (!image) {
+      broadcast(panelEvent('error', { message: 'Codex 已完成回复，但没有检测到新的融合预览图。可以重新生成一次。' }));
+      return;
+    }
+
+    latestProductReplacementPreview = {
+      ...image,
+      name: imageFileLabel(image.path),
+      previewUrl: `/gallery-image?path=${encodeURIComponent(image.path)}`
+    };
+    broadcast(panelEvent('product_replacement_preview', { image: latestProductReplacementPreview }));
+  }
+
+  async function importProductReplacementPreview({ path, mode = 'safe-auto' } = {}) {
+    const filePath = path || latestProductReplacementPreview?.path;
+    if (!filePath) {
+      broadcast(panelEvent('error', { message: '还没有可导入的产品替换预览图。' }));
+      return;
+    }
+    await readCodexImageFile({ searchDir: codexImageDir, filePath });
+    const tools = createPhotoshopTools({ appServer, mode: normalizeMode(mode) });
+    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'import_product_replacement_preview', status: 'started' }));
+    const placeResult = await tools.placeImage({ filePath });
+    if (placeResult?.isError) {
+      broadcast(panelEvent('error', { message: `产品替换预览导入失败：${shortenTechnicalText(textFromToolResult(placeResult))}`, details: placeResult }));
+      return;
+    }
+    await tools.fitActiveLayerToDocument({ fillDocument: true });
+    await tools.prepareReplacementResultLayer({ layerName: '替换结果 01' });
+    broadcast(panelEvent('assistant_delta', { text: `已导入替换结果 01，新图层已保留，原详情图未被覆盖。` }));
   }
 
   async function handlePanelChat(body) {
@@ -254,12 +394,22 @@ export function createBridgeServer({
     const event = normalizeAppServerNotification(notification);
     if (event.type !== 'raw_event') broadcast(event);
 
-    if (notification?.method !== 'turn/completed' || pendingCodexImageImports.length === 0) return;
-    const request = pendingCodexImageImports.shift();
-    try {
-      await placeGeneratedCodexImage(request);
-    } catch (error) {
-      broadcast(panelEvent('error', { message: error.message }));
+    if (notification?.method !== 'turn/completed') return;
+    if (pendingCodexImageImports.length > 0) {
+      const request = pendingCodexImageImports.shift();
+      try {
+        await placeGeneratedCodexImage(request);
+      } catch (error) {
+        broadcast(panelEvent('error', { message: error.message }));
+      }
+    }
+    if (pendingProductReplacementPreviews.length > 0) {
+      const request = pendingProductReplacementPreviews.shift();
+      try {
+        await finishProductReplacementPreview(request);
+      } catch (error) {
+        broadcast(panelEvent('error', { message: error.message }));
+      }
     }
   }
 
@@ -279,6 +429,14 @@ export function createBridgeServer({
         const url = new URL(req.url, `http://${req.headers.host || '127.0.0.1'}`);
         const filePath = url.searchParams.get('path');
         const image = await readCodexImageFile({ searchDir: codexImageDir, filePath });
+        sendFile(res, 200, image.buffer, image.contentType);
+        return;
+      }
+
+      if (req.method === 'GET' && req.url?.startsWith('/product-reference')) {
+        const url = new URL(req.url, `http://${req.headers.host || '127.0.0.1'}`);
+        const filePath = url.searchParams.get('path');
+        const image = await readProductReferenceFile({ referenceDir: productReferenceDir, filePath });
         sendFile(res, 200, image.buffer, image.contentType);
         return;
       }
@@ -343,6 +501,42 @@ export function createBridgeServer({
         if (body.type === 'import_images') {
           await importGalleryImages(body.paths, body.mode);
           sendSocket(socket, panelEvent('status', { message: 'Gallery import requested' }));
+          return;
+        }
+
+        if (body.type === 'upload_product_reference') {
+          await saveProductReference({
+            referenceDir: productReferenceDir,
+            name: body.name,
+            mimeType: body.mimeType,
+            data: body.data
+          });
+          sendSocket(socket, panelEvent('product_references', { references: await listProductReferenceImages() }));
+          return;
+        }
+
+        if (body.type === 'list_product_references') {
+          sendSocket(socket, panelEvent('product_references', { references: await listProductReferenceImages() }));
+          return;
+        }
+
+        if (body.type === 'create_product_target') {
+          await createProductTarget(body.mode);
+          return;
+        }
+
+        if (body.type === 'read_product_target') {
+          await readProductTarget(body.mode);
+          return;
+        }
+
+        if (body.type === 'generate_product_replacement_preview') {
+          await generateProductReplacementPreview(body);
+          return;
+        }
+
+        if (body.type === 'import_product_replacement_preview') {
+          await importProductReplacementPreview(body);
           return;
         }
 

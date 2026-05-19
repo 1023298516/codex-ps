@@ -66,6 +66,40 @@ test('panel can request gallery images and import multiple selections', async ()
   assert.match(js, /confirmImportPreview/);
 });
 
+test('panel exposes product replacement controls with Chinese copy', async () => {
+  const html = await readFile('agent/panel/index.html', 'utf8');
+  assert.match(html, /id="product-replace-open"/);
+  assert.match(html, /id="product-modal"/);
+  assert.match(html, /产品替换/);
+  assert.match(html, /id="product-create-target"/);
+  assert.match(html, /id="product-read-target"/);
+  assert.match(html, /id="product-reference-input"/);
+  assert.match(html, /multiple/);
+  assert.match(html, /accept="image\/\*"/);
+  assert.match(html, /id="product-generate-preview"/);
+  assert.match(html, /id="product-import-preview"/);
+});
+
+test('panel sends product replacement commands to the bridge', async () => {
+  const js = await readFile('agent/panel/panel.js', 'utf8');
+  assert.match(js, /type: 'upload_product_reference'/);
+  assert.match(js, /type: 'list_product_references'/);
+  assert.match(js, /type: 'create_product_target'/);
+  assert.match(js, /type: 'read_product_target'/);
+  assert.match(js, /type: 'generate_product_replacement_preview'/);
+  assert.match(js, /type: 'import_product_replacement_preview'/);
+  assert.match(js, /event\.type === 'product_references'/);
+  assert.match(js, /event\.type === 'product_replacement_preview'/);
+});
+
+test('panel styles product replacement UI as a compact Photoshop tool surface', async () => {
+  const css = await readFile('agent/panel/styles.css', 'utf8');
+  assert.match(css, /\.product-modal/);
+  assert.match(css, /\.product-reference-grid/);
+  assert.match(css, /\.product-preview-frame/);
+  assert.doesNotMatch(css, /border-radius:\s*(2[0-9]|[3-9][0-9])px/);
+});
+
 test('panel compacts verbose technical output before rendering logs', async () => {
   const js = await readFile('agent/panel/panel.js', 'utf8');
   assert.match(js, /compactDisplayText/);

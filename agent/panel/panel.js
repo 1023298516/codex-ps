@@ -18,6 +18,21 @@ const TOOL_LABELS = {
   },
   read_layers: {
     started: '正在读取当前图层...'
+  },
+  create_product_target_layer: {
+    started: '正在新建目标图层...'
+  },
+  read_product_target_layer: {
+    started: '正在读取目标图层...'
+  },
+  export_canvas: {
+    started: '正在导出详情页预览...'
+  },
+  product_replacement_preview: {
+    started: '正在生成产品融合预览...'
+  },
+  import_product_replacement_preview: {
+    started: '正在导入替换结果...'
   }
 };
 
@@ -43,6 +58,16 @@ let previewImport = null;
 let galleryImages = [];
 let selectedImagePaths = new Set();
 let pendingImportPaths = [];
+let productModal = null;
+let productReferenceInput = null;
+let productReferenceGrid = null;
+let productReferenceEmpty = null;
+let productReferenceCount = null;
+let productPreviewImage = null;
+let productPreviewStatus = null;
+let productImportPreview = null;
+let productReferences = [];
+let productPreviewPath = null;
 
 function isTechnicalText(text) {
   return /imagePath|filePath|LayerKind|DocumentMode|Result:|\/Users\/|\{.*[:=].*\}/s.test(text);
@@ -187,6 +212,20 @@ function galleryImageUrl(image) {
   return `${BRIDGE_HTTP_URL}${image.previewUrl}`;
 }
 
+function productReferenceUrl(reference) {
+  if (!reference.previewUrl) return '';
+  if (/^https?:\/\//.test(reference.previewUrl)) return reference.previewUrl;
+  return `${BRIDGE_HTTP_URL}${reference.previewUrl}`;
+}
+
+function requestProductReferences() {
+  try {
+    sendCommand({ type: 'list_product_references' });
+  } catch (error) {
+    addEvent({ type: 'error', message: error.message });
+  }
+}
+
 function updateGallerySelection() {
   const count = selectedImagePaths.size;
   if (gallerySelectedCount) gallerySelectedCount.textContent = `已选择 ${count} 张`;
@@ -319,6 +358,132 @@ function closeGallery() {
   galleryModal.setAttribute('aria-hidden', 'true');
 }
 
+function renderProductReferences(references) {
+  productReferences = references || [];
+  if (productReferenceCount) productReferenceCount.textContent = `已上传 ${productReferences.length} 张参考图`;
+  if (!productReferenceGrid || !productReferenceEmpty) return;
+
+  productReferenceGrid.textContent = '';
+  productReferenceEmpty.classList.toggle('hidden', productReferences.length > 0);
+  productReferenceGrid.classList.toggle('hidden', productReferences.length === 0);
+
+  for (const reference of productReferences) {
+    const card = document.createElement('div');
+    card.className = 'product-reference-card';
+
+    const image = document.createElement('img');
+    image.src = productReferenceUrl(reference);
+    image.alt = reference.name || '产品参考图';
+    card.appendChild(image);
+
+    const name = document.createElement('span');
+    name.textContent = reference.name || '产品参考图';
+    card.appendChild(name);
+
+    productReferenceGrid.appendChild(card);
+  }
+}
+
+function openProductReplacement() {
+  if (!productModal) return;
+  productModal.classList.remove('hidden');
+  productModal.setAttribute('aria-hidden', 'false');
+  requestProductReferences();
+}
+
+function closeProductReplacement() {
+  if (!productModal) return;
+  productModal.classList.add('hidden');
+  productModal.setAttribute('aria-hidden', 'true');
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('读取图片失败'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadProductReferenceFiles(files) {
+  const imageFiles = [...files].filter(file => /^image\//.test(file.type || ''));
+  if (!imageFiles.length) {
+    addEvent({ type: 'error', message: '请选择产品图片。' });
+    return;
+  }
+
+  for (const file of imageFiles) {
+    const dataUrl = await readFileAsDataUrl(file);
+    sendCommand({
+      type: 'upload_product_reference',
+      name: file.name,
+      mimeType: file.type || 'image/png',
+      data: dataUrl
+    });
+  }
+}
+
+function setProductPreview(image) {
+  productPreviewPath = image?.path || null;
+  if (productPreviewImage) productPreviewImage.src = image ? galleryImageUrl(image) : '';
+  if (productPreviewStatus) productPreviewStatus.textContent = image ? '已生成' : '未生成';
+  if (productImportPreview) {
+    productImportPreview.toggleAttribute('disabled', !productPreviewPath);
+    productImportPreview.classList.toggle('button-primary', Boolean(productPreviewPath));
+    productImportPreview.classList.toggle('button-secondary', !productPreviewPath);
+  }
+}
+
+function createProductTarget() {
+  try {
+    sendCommand({ type: 'create_product_target', mode });
+  } catch (error) {
+    addEvent({ type: 'error', message: error.message });
+  }
+}
+
+function readProductTarget() {
+  try {
+    sendCommand({ type: 'read_product_target', mode });
+  } catch (error) {
+    addEvent({ type: 'error', message: error.message });
+  }
+}
+
+function generateProductPreview() {
+  if (!productReferences.length) {
+    addEvent({ type: 'error', message: '请先上传产品参考图。' });
+    return;
+  }
+  setProductPreview(null);
+  try {
+    sendCommand({
+      type: 'generate_product_replacement_preview',
+      mode,
+      referencePaths: productReferences.map(reference => reference.path)
+    });
+  } catch (error) {
+    addEvent({ type: 'error', message: error.message });
+  }
+}
+
+function importProductPreview() {
+  if (!productPreviewPath) {
+    addEvent({ type: 'error', message: '请先生成融合预览。' });
+    return;
+  }
+  try {
+    sendCommand({
+      type: 'import_product_replacement_preview',
+      mode,
+      path: productPreviewPath
+    });
+  } catch (error) {
+    addEvent({ type: 'error', message: error.message });
+  }
+}
+
 function scheduleReconnect() {
   if (reconnectTimer) return;
   reconnectTimer = setTimeout(() => {
@@ -356,6 +521,15 @@ function connectBridge() {
         renderGallery(event.images);
         return;
       }
+      if (event.type === 'product_references') {
+        renderProductReferences(event.references);
+        return;
+      }
+      if (event.type === 'product_replacement_preview') {
+        setProductPreview(event.image);
+        addEvent({ type: 'assistant_delta', text: '融合预览已生成，确认后可导入画布。' });
+        return;
+      }
       addEvent(event);
     } catch (error) {
       addEvent({ type: 'error', message: error.message });
@@ -387,6 +561,14 @@ function init() {
   previewTitle = document.querySelector('#preview-title');
   previewMeta = document.querySelector('#preview-meta');
   previewImport = document.querySelector('#preview-import');
+  productModal = document.querySelector('#product-modal');
+  productReferenceInput = document.querySelector('#product-reference-input');
+  productReferenceGrid = document.querySelector('#product-reference-grid');
+  productReferenceEmpty = document.querySelector('#product-reference-empty');
+  productReferenceCount = document.querySelector('#product-reference-count');
+  productPreviewImage = document.querySelector('#product-preview-image');
+  productPreviewStatus = document.querySelector('#product-preview-status');
+  productImportPreview = document.querySelector('#product-import-preview');
 
   document.querySelectorAll('[data-mode]').forEach(button => {
     button.addEventListener('click', () => {
@@ -414,6 +596,25 @@ function init() {
   });
 
   document.querySelector('#gallery-open').addEventListener('click', openGallery);
+
+  document.querySelector('#product-replace-open').addEventListener('click', openProductReplacement);
+
+  document.querySelector('#product-close').addEventListener('click', closeProductReplacement);
+
+  document.querySelector('#product-create-target').addEventListener('click', createProductTarget);
+
+  document.querySelector('#product-read-target').addEventListener('click', readProductTarget);
+
+  document.querySelector('#product-upload-trigger').addEventListener('click', () => productReferenceInput.click());
+
+  productReferenceInput.addEventListener('change', event => {
+    uploadProductReferenceFiles(event.target.files || []).catch(error => addEvent({ type: 'error', message: error.message }));
+    event.target.value = '';
+  });
+
+  document.querySelector('#product-generate-preview').addEventListener('click', generateProductPreview);
+
+  productImportPreview.addEventListener('click', importProductPreview);
 
   document.querySelector('#gallery-close').addEventListener('click', closeGallery);
 
@@ -448,6 +649,8 @@ function init() {
 
   addEvent({ type: 'status', message: 'Panel UI initialized' });
   updateGallerySelection();
+  renderProductReferences([]);
+  setProductPreview(null);
   connectBridge();
 }
 

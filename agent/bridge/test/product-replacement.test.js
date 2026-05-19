@@ -1,0 +1,101 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import {
+  buildProductReplacementInput,
+  listProductReferences,
+  readProductReferenceFile,
+  saveProductReference
+} from '../src/product-replacement.js';
+
+test('saves uploaded product reference images for later preview generation', async () => {
+  const referenceDir = await mkdtemp(join(tmpdir(), 'codex-ps-product-refs-'));
+  try {
+    const saved = await saveProductReference({
+      referenceDir,
+      name: 'Front Bottle.PNG',
+      mimeType: 'image/png',
+      data: Buffer.from('fake png').toString('base64')
+    });
+
+    assert.equal(saved.name, 'Front Bottle.png');
+    assert.equal(saved.mimeType, 'image/png');
+    assert.equal(saved.previewUrl, `/product-reference?path=${encodeURIComponent(saved.path)}`);
+    assert.equal(await readFile(saved.path, 'utf8'), 'fake png');
+  } finally {
+    await rm(referenceDir, { recursive: true, force: true });
+  }
+});
+
+test('rejects non-image product references', async () => {
+  const referenceDir = await mkdtemp(join(tmpdir(), 'codex-ps-product-refs-'));
+  try {
+    await assert.rejects(() => saveProductReference({
+      referenceDir,
+      name: 'notes.txt',
+      mimeType: 'text/plain',
+      data: Buffer.from('not image').toString('base64')
+    }), /只支持上传图片/);
+  } finally {
+    await rm(referenceDir, { recursive: true, force: true });
+  }
+});
+
+test('lists product references newest first and serves only files inside the reference directory', async () => {
+  const referenceDir = await mkdtemp(join(tmpdir(), 'codex-ps-product-refs-'));
+  try {
+    const first = await saveProductReference({
+      referenceDir,
+      name: 'front.png',
+      mimeType: 'image/png',
+      data: Buffer.from('front').toString('base64')
+    });
+    const second = await saveProductReference({
+      referenceDir,
+      name: 'side.jpg',
+      mimeType: 'image/jpeg',
+      data: Buffer.from('side').toString('base64')
+    });
+
+    const references = await listProductReferences({ referenceDir });
+    assert.equal(references.length, 2);
+    assert.equal(references[0].path, second.path);
+    assert.equal(references[1].path, first.path);
+
+    const served = await readProductReferenceFile({ referenceDir, filePath: second.path });
+    assert.equal(served.contentType, 'image/jpeg');
+    assert.equal(served.buffer.toString('utf8'), 'side');
+
+    await assert.rejects(() => readProductReferenceFile({
+      referenceDir,
+      filePath: join(referenceDir, '..', 'outside.png')
+    }), /参考图目录之外/);
+  } finally {
+    await rm(referenceDir, { recursive: true, force: true });
+  }
+});
+
+test('builds Codex image-generation input with anti-hallucination and style-fusion constraints', () => {
+  const input = buildProductReplacementInput({
+    canvasPath: '/tmp/detail-page.png',
+    target: { bounds: { left: 10, top: 20, right: 210, bottom: 420 } },
+    references: [
+      { path: '/tmp/front.png', name: 'front.png' },
+      { path: '/tmp/side.png', name: 'side.png' }
+    ]
+  });
+
+  assert.equal(input[0].type, 'text');
+  assert.match(input[0].text, /双向结合/);
+  assert.match(input[0].text, /产品保真/);
+  assert.match(input[0].text, /画面融合/);
+  assert.match(input[0].text, /不要改形、改色、改材质、改 LOGO/);
+  assert.match(input[0].text, /10, 20, 210, 420/);
+  assert.deepEqual(input.slice(1), [
+    { type: 'localImage', path: '/tmp/detail-page.png' },
+    { type: 'localImage', path: '/tmp/front.png' },
+    { type: 'localImage', path: '/tmp/side.png' }
+  ]);
+});

@@ -63,6 +63,47 @@ test('safe-auto fits the active layer to the document through Photoshop MCP', as
   });
 });
 
+test('safe-auto creates a visible product target layer through Photoshop MCP', async () => {
+  const appServer = fakeAppServer();
+  const tools = createPhotoshopTools({ appServer, mode: 'safe-auto' });
+  await tools.createProductTargetLayer();
+  assert.equal(appServer.calls[0].server, 'photoshop');
+  assert.equal(appServer.calls[0].tool, 'photoshop_execute_script');
+  assert.match(appServer.calls[0].args.code, /圈选目标组/);
+  assert.match(appServer.calls[0].args.code, /目标 01/);
+});
+
+test('safe-auto reads product target layer bounds through Photoshop MCP', async () => {
+  const appServer = fakeAppServer();
+  const tools = createPhotoshopTools({ appServer, mode: 'safe-auto' });
+  await tools.readProductTargetLayer();
+  assert.equal(appServer.calls[0].server, 'photoshop');
+  assert.equal(appServer.calls[0].tool, 'photoshop_execute_script');
+  assert.match(appServer.calls[0].args.code, /目标 01/);
+  assert.match(appServer.calls[0].args.code, /bounds/);
+});
+
+test('safe-auto exports the current canvas for product replacement preview generation', async () => {
+  const appServer = fakeAppServer();
+  const tools = createPhotoshopTools({ appServer, mode: 'safe-auto' });
+  await tools.exportCanvasPng({ outputPath: '/tmp/detail-page.png' });
+  assert.deepEqual(appServer.calls[0], {
+    server: 'photoshop',
+    tool: 'photoshop_export_canvas_png',
+    args: { outputPath: '/tmp/detail-page.png' }
+  });
+});
+
+test('safe-auto prepares the imported replacement result as a named result layer', async () => {
+  const appServer = fakeAppServer();
+  const tools = createPhotoshopTools({ appServer, mode: 'safe-auto' });
+  await tools.prepareReplacementResultLayer({ layerName: '替换结果 01' });
+  assert.equal(appServer.calls[0].server, 'photoshop');
+  assert.equal(appServer.calls[0].tool, 'photoshop_execute_script');
+  assert.match(appServer.calls[0].args.code, /替换结果组/);
+  assert.match(appServer.calls[0].args.code, /替换结果 01/);
+});
+
 test('safe-auto blocks destructive actions', async () => {
   const tools = createPhotoshopTools({ appServer: fakeAppServer(), mode: 'safe-auto' });
   await assert.rejects(() => tools.deleteLayer({ layerId: 7 }), /delete_layer blocked in B safe-auto mode/);

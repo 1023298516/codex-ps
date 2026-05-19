@@ -200,7 +200,7 @@ button {
 
 .quick-actions {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 7px;
 }
 
@@ -322,8 +322,17 @@ textarea::placeholder {
   display: none !important;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
 .gallery-modal,
-.preview-modal {
+.preview-modal,
+.product-modal {
   position: absolute;
   inset: 0;
   z-index: 20;
@@ -339,7 +348,8 @@ textarea::placeholder {
 }
 
 .gallery-dialog,
-.preview-dialog {
+.preview-dialog,
+.product-dialog {
   width: min(100%, 370px);
   max-height: calc(100% - 18px);
   display: flex;
@@ -353,7 +363,9 @@ textarea::placeholder {
 .gallery-header,
 .gallery-footer,
 .preview-header,
-.preview-footer {
+.preview-footer,
+.product-header,
+.product-footer {
   padding: 12px;
   display: flex;
   align-items: center;
@@ -363,7 +375,9 @@ textarea::placeholder {
 }
 
 .gallery-header strong,
-.preview-header strong {
+.preview-header strong,
+.product-header strong,
+.product-preview-header strong {
   display: block;
   color: var(--text);
   font-size: 18px;
@@ -371,7 +385,9 @@ textarea::placeholder {
 }
 
 .gallery-header span,
-.preview-header span {
+.preview-header span,
+.product-header span,
+.product-preview-header span {
   display: block;
   color: var(--text-3);
   font-size: 11px;
@@ -383,7 +399,9 @@ textarea::placeholder {
 }
 
 .gallery-header-actions,
-.preview-footer {
+.preview-footer,
+.product-actions,
+.product-footer {
   display: flex;
   gap: 8px;
 }
@@ -399,7 +417,8 @@ textarea::placeholder {
 }
 
 .gallery-toolbar span,
-.preview-note strong {
+.preview-note strong,
+.product-rule-row span {
   display: inline-flex;
   min-height: 26px;
   align-items: center;
@@ -419,20 +438,23 @@ textarea::placeholder {
 }
 
 .gallery-toolbar span:nth-child(3),
-.preview-note strong {
+.preview-note strong,
+.product-rule-row span:nth-child(3) {
   border-color: rgba(18, 128, 92, 0.48);
   background: #26352f;
   color: #b5f4cf;
 }
 
 .gallery-footer,
-.preview-footer {
+.preview-footer,
+.product-footer {
   border-top: 1px solid var(--border);
   border-bottom: 0;
 }
 
 .gallery-footer .button-primary,
-.preview-footer .button-primary {
+.preview-footer .button-primary,
+.product-footer .button-primary {
   flex: 1 1 auto;
 }
 
@@ -590,9 +612,139 @@ textarea::placeholder {
   font-size: 11px;
 }
 
+.product-actions {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-wrap: wrap;
+}
+
+.product-actions .button {
+  flex: 1 1 96px;
+}
+
+.product-rule-row {
+  min-height: 42px;
+  padding: 8px 12px;
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.product-rule-row span:nth-child(1) {
+  border-color: rgba(20, 115, 230, 0.48);
+  background: #263a52;
+  color: #9ec9ff;
+}
+
+.product-rule-row span:nth-child(2) {
+  border-color: rgba(216, 155, 0, 0.48);
+  background: #332d20;
+  color: #ffe08a;
+}
+
+.product-empty {
+  margin: 12px;
+  min-height: 88px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.product-empty strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.product-empty span {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.product-reference-grid {
+  min-height: 96px;
+  max-height: 174px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.product-reference-card {
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+}
+
+.product-reference-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: #111111;
+}
+
+.product-reference-card span {
+  display: block;
+  margin-top: 5px;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 10px;
+  line-height: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-preview {
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.product-preview-header {
+  padding: 10px 12px 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.product-preview-header strong {
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.product-preview-frame {
+  margin: 10px 12px 12px;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #111111;
+  overflow: hidden;
+}
+
+.product-preview-frame img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
 @media (max-width: 350px) {
   .gallery-modal,
-  .preview-modal {
+  .preview-modal,
+  .product-modal {
     padding: 10px;
   }
 
@@ -607,5 +759,9 @@ textarea::placeholder {
   .gallery-grid {
     gap: 8px;
     padding: 10px;
+  }
+
+  .product-reference-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

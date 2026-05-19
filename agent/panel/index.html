@@ -30,6 +30,10 @@
             <span class="action-icon">▦</span>
             <span>图库</span>
           </button>
+          <button id="product-replace-open" class="action-button" type="button">
+            <span class="action-icon">◎</span>
+            <span>产品替换</span>
+          </button>
           <button id="import-latest" class="action-button" type="button">
             <span class="action-icon">↧</span>
             <span>导入最新</span>
@@ -54,6 +58,52 @@
         <div class="composer-footer">
           <span>⌘ Enter 发送</span>
           <button id="send" class="button button-primary" type="button">发送</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="product-modal" class="product-modal hidden" aria-hidden="true">
+      <div class="product-dialog">
+        <div class="product-header">
+          <div>
+            <strong>产品替换</strong>
+            <span id="product-reference-count">已上传 0 张参考图</span>
+          </div>
+          <button id="product-close" class="button button-secondary" type="button">关闭</button>
+        </div>
+
+        <div class="product-actions">
+          <button id="product-create-target" class="button button-primary" type="button">新建目标层</button>
+          <button id="product-read-target" class="button button-secondary" type="button">读取目标</button>
+          <button id="product-upload-trigger" class="button button-secondary" type="button">上传产品图</button>
+          <input id="product-reference-input" class="visually-hidden" type="file" accept="image/*" multiple>
+        </div>
+
+        <div class="product-rule-row">
+          <span>产品保真</span>
+          <span>画面融合</span>
+          <span>新图层</span>
+        </div>
+
+        <div id="product-reference-empty" class="product-empty">
+          <strong>等待产品参考图</strong>
+          <span>建议上传正面、侧面、细节等多方位图片。</span>
+        </div>
+        <div id="product-reference-grid" class="product-reference-grid hidden"></div>
+
+        <div class="product-preview">
+          <div class="product-preview-header">
+            <strong>融合预览</strong>
+            <span id="product-preview-status">未生成</span>
+          </div>
+          <div class="product-preview-frame">
+            <img id="product-preview-image" alt="产品替换融合预览">
+          </div>
+        </div>
+
+        <div class="product-footer">
+          <button id="product-generate-preview" class="button button-primary" type="button">生成融合预览</button>
+          <button id="product-import-preview" class="button button-secondary" type="button" disabled>导入画布</button>
         </div>
       </div>
     </div>

@@ -9,6 +9,10 @@ const SAFE_AUTO_ALLOWED = new Set([
   'open_image',
   'place_image',
   'place_latest_codex_image',
+  'create_product_target_layer',
+  'read_product_target_layer',
+  'export_canvas',
+  'prepare_replacement_result_layer',
   'rename_new_layer',
   'transform_new_or_selected_layer',
   'selection_to_new_layer_result'
