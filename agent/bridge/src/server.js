@@ -13,6 +13,7 @@ import {
   buildProductRetouchInput,
   deleteProductReference,
   listProductReferences,
+  parseProductIdentificationTargets,
   readProductReferenceFile,
   saveProductReference
 } from './product-replacement.js';
@@ -71,7 +72,7 @@ function toolResultMentions(result, pattern) {
 
 function targetFromToolResult(result) {
   const text = textFromToolResult(result);
-  const match = text.match(/left[:=]\s*([-\d.]+)[\s\S]*?top[:=]\s*([-\d.]+)[\s\S]*?right[:=]\s*([-\d.]+)[\s\S]*?bottom[:=]\s*([-\d.]+)/i);
+  const match = text.match(/"?left"?\s*[:=]\s*([-\d.]+)[\s\S]*?"?top"?\s*[:=]\s*([-\d.]+)[\s\S]*?"?right"?\s*[:=]\s*([-\d.]+)[\s\S]*?"?bottom"?\s*[:=]\s*([-\d.]+)/i);
   if (!match) return { text };
   return {
     text,
@@ -129,6 +130,7 @@ export function createBridgeServer({
   const pendingCodexImageImports = [];
   const pendingProductReplacementPreviews = [];
   const pendingProductRetouchLayers = [];
+  const pendingProductTargetIdentifications = [];
   let latestProductReplacementPreview = null;
   let lockedProductTarget = null;
 
@@ -297,7 +299,8 @@ export function createBridgeServer({
   }
 
   async function identifyProductTarget(mode = 'safe-auto') {
-    const tools = createPhotoshopTools({ appServer, mode: normalizeMode(mode) });
+    const normalizedMode = normalizeMode(mode);
+    const tools = createPhotoshopTools({ appServer, mode: normalizedMode });
     const canvasPath = join(productReferenceDir, 'target-exports', `detail-page-target-${Date.now()}.png`);
     await mkdir(dirname(canvasPath), { recursive: true });
     broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'export_canvas', status: 'started' }));
@@ -307,18 +310,37 @@ export function createBridgeServer({
       return;
     }
 
-    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'create_product_target_layer', status: 'started' }));
-    const targetResult = await tools.createProductTargetLayer();
-    if (targetResult?.isError) {
-      broadcast(panelEvent('error', { message: shortenTechnicalText(textFromToolResult(targetResult)), details: targetResult }));
-      return;
-    }
-
     lockedProductTarget = null;
-    broadcast(panelEvent('assistant_delta', { text: '已生成候选目标图层：圈选目标组 / 目标 01。Codex 会给出识别建议，请人工确认后锁定。' }));
+    pendingProductTargetIdentifications.push({ mode: normalizedMode, text: '' });
+    broadcast(panelEvent('assistant_delta', { text: '正在识别产品位置；识别完成后会按坐标生成候选目标图层，请人工确认后锁定。' }));
     broadcast(panelEvent('tool_event', { server: 'codex', tool: 'product_target_identification', status: 'started' }));
     await appServer.startTurn(buildProductIdentificationInput({ canvasPath }));
     if (appServer.threadId) await store?.update?.({ threadId: appServer.threadId });
+  }
+
+  async function finishProductTargetIdentification(request) {
+    const targets = parseProductIdentificationTargets(request.text);
+    if (targets.length === 0) {
+      broadcast(panelEvent('assistant_delta', {
+        text: 'Codex 已给出识别建议，但没有返回可靠坐标。请在 Photoshop 里手动画出目标图层后点击“确认目标”。'
+      }));
+      return;
+    }
+
+    const tools = createPhotoshopTools({ appServer, mode: request.mode });
+    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'create_product_target_layer', status: 'started' }));
+    const result = await tools.createProductTargetLayer({ targets });
+    if (result?.isError) {
+      broadcast(panelEvent('error', { message: shortenTechnicalText(textFromToolResult(result)), details: result }));
+      return;
+    }
+
+    const target = targetFromToolResult(result);
+    lockedProductTarget = null;
+    broadcast(panelEvent('product_target_state', { locked: false, target }));
+    broadcast(panelEvent('assistant_delta', {
+      text: `已按识别结果生成 ${targets.length} 个候选目标图层。请检查是否覆盖完整产品，必要时手动调整后点击“确认目标”。`
+    }));
   }
 
   async function lockProductTarget(mode = 'safe-auto') {
@@ -576,9 +598,20 @@ export function createBridgeServer({
     // Keep the normal Codex chat stream visible, then run Photoshop side effects
     // after Codex's own image generation turn has finished writing files.
     const event = normalizeAppServerNotification(notification);
+    if (pendingProductTargetIdentifications.length > 0 && event.type === 'assistant_delta') {
+      pendingProductTargetIdentifications[pendingProductTargetIdentifications.length - 1].text += event.text || '';
+    }
     if (event.type !== 'raw_event') broadcast(event);
 
     if (notification?.method !== 'turn/completed') return;
+    if (pendingProductTargetIdentifications.length > 0) {
+      const request = pendingProductTargetIdentifications.shift();
+      try {
+        await finishProductTargetIdentification(request);
+      } catch (error) {
+        broadcast(panelEvent('error', { message: error.message }));
+      }
+    }
     if (pendingCodexImageImports.length > 0) {
       const request = pendingCodexImageImports.shift();
       try {

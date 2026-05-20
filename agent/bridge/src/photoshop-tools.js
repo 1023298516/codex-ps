@@ -16,8 +16,18 @@ function quoted(value) {
 
 function createTargetLayerScript({
   groupName = TARGET_GROUP_NAME,
-  layerName = TARGET_LAYER_NAME
+  layerName = TARGET_LAYER_NAME,
+  targets = null,
+  bounds = null
 } = {}) {
+  const targetSpecs = Array.isArray(targets) && targets.length > 0
+    ? targets.map((target, index) => ({
+      name: target.name || `${layerName} ${String(index + 1).padStart(2, '0')}`,
+      bounds: target.bounds || target
+    }))
+    : bounds
+      ? [{ name: layerName, bounds }]
+      : [];
   return `
 if (app.documents.length === 0) {
   throw new Error('No active document');
@@ -25,6 +35,7 @@ if (app.documents.length === 0) {
 var doc = app.activeDocument;
 var groupName = ${quoted(groupName)};
 var layerName = ${quoted(layerName)};
+var targetSpecs = ${JSON.stringify(targetSpecs)};
 
 function findLayerSet(parent, name) {
   for (var i = 0; i < parent.layerSets.length; i++) {
@@ -41,30 +52,63 @@ if (!group) {
 
 var width = doc.width.as('px');
 var height = doc.height.as('px');
-var left = Math.round(width * 0.34);
-var top = Math.round(height * 0.12);
-var right = Math.round(width * 0.66);
-var bottom = Math.round(height * 0.78);
-
-var layer = group.artLayers.add();
-layer.name = layerName;
-layer.opacity = 55;
-doc.activeLayer = layer;
-
 var color = new SolidColor();
 color.rgb.red = 49;
 color.rgb.green = 168;
 color.rgb.blue = 255;
 
-doc.selection.select([[left, top], [right, top], [right, bottom], [left, bottom]]);
-doc.selection.stroke(color, 4, StrokeLocation.INSIDE);
-doc.selection.deselect();
+if (!targetSpecs || targetSpecs.length === 0) {
+  targetSpecs = [{
+    name: layerName,
+    bounds: {
+      left: Math.round(width * 0.16),
+      top: Math.round(height * 0.22),
+      right: Math.round(width * 0.84),
+      bottom: Math.round(height * 0.58)
+    }
+  }];
+}
+
+while (group.layers.length > 0) {
+  group.layers[0].remove();
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+var createdTargets = [];
+for (var i = 0; i < targetSpecs.length; i++) {
+  var spec = targetSpecs[i];
+  var bounds = spec.bounds || {};
+  var left = clamp(bounds.left, 0, width);
+  var top = clamp(bounds.top, 0, height);
+  var right = clamp(bounds.right, left + 1, width);
+  var bottom = clamp(bounds.bottom, top + 1, height);
+
+  var layer = group.artLayers.add();
+  layer.name = spec.name || (layerName + ' ' + (i + 1));
+  layer.opacity = 55;
+  doc.activeLayer = layer;
+
+  doc.selection.select([[left, top], [right, top], [right, bottom], [left, bottom]]);
+  doc.selection.stroke(color, 4, StrokeLocation.INSIDE);
+  doc.selection.deselect();
+
+  createdTargets.push({
+    layerName: layer.name,
+    bounds: { left: left, top: top, right: right, bottom: bottom }
+  });
+}
+
+var firstTarget = createdTargets[0];
 
 return {
   created: true,
   groupName: groupName,
-  layerName: layer.name,
-  bounds: { left: left, top: top, right: right, bottom: bottom }
+  layerName: firstTarget.layerName,
+  bounds: firstTarget.bounds,
+  targets: createdTargets
 };
 `;
 }

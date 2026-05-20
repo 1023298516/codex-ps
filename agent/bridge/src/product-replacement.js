@@ -168,6 +168,49 @@ function productReferenceText(references = []) {
   };
 }
 
+function jsonCandidatesFromText(text) {
+  const value = String(text || '');
+  const candidates = [...value.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].map(match => match[1]);
+  const start = value.indexOf('{');
+  const end = value.lastIndexOf('}');
+  if (start >= 0 && end > start) candidates.push(value.slice(start, end + 1));
+  return candidates;
+}
+
+function numericBoundsFromTarget(target = {}) {
+  const source = target.bounds || target;
+  const bounds = {
+    left: Number(source.left),
+    top: Number(source.top),
+    right: Number(source.right),
+    bottom: Number(source.bottom)
+  };
+  if (!Object.values(bounds).every(Number.isFinite)) return null;
+  if (bounds.right <= bounds.left || bounds.bottom <= bounds.top) return null;
+  return bounds;
+}
+
+export function parseProductIdentificationTargets(text, { limit = 5 } = {}) {
+  for (const candidate of jsonCandidatesFromText(text)) {
+    try {
+      const parsed = JSON.parse(candidate);
+      const rawTargets = Array.isArray(parsed) ? parsed : parsed.targets;
+      if (!Array.isArray(rawTargets)) continue;
+      return rawTargets
+        .map((target, index) => ({
+          name: `目标 ${String(index + 1).padStart(2, '0')}`,
+          bounds: numericBoundsFromTarget(target),
+          reason: String(target.reason || target.description || '').trim()
+        }))
+        .filter(target => target.bounds)
+        .slice(0, limit);
+    } catch {
+      // Codex may include prose before the strict JSON block; try the next block.
+    }
+  }
+  return [];
+}
+
 function normalizeReplacementMode(replacementMode) {
   return replacementMode === 'multi' ? 'multi' : 'single';
 }
@@ -192,9 +235,12 @@ export function buildProductIdentificationInput({
     '',
     '目标：找出需要被替换的旧产品候选目标，帮助用户人工确认。请重点寻找主商品、包装、瓶身、盒子、模特手持产品或详情页中心商品。',
     '输出候选目标时，请用简短中文说明：候选目标编号、在画面中的大致方位、为什么认为它是产品、可能遗漏的区域。',
+    '请在回复最后附上严格 JSON，不要在 JSON 里写注释。坐标使用当前上传画布图片的像素坐标。',
+    'JSON 格式：{"targets":[{"left":0,"top":0,"right":0,"bottom":0,"reason":"为什么是产品"}]}',
+    '如果详情页里同一产品出现多个方位，请最多输出 5 个目标，每个目标框覆盖完整产品，不要只框住产品中间一条窄区域。',
     '注意：这一步只是候选目标识别，最后必须由人工确认。不要直接替换产品。',
     '',
-    '输出要求：只输出识别建议和人工确认提醒。'
+    '输出要求：先输出识别建议和人工确认提醒，最后输出 JSON。'
   ].join('\n');
 
   return [

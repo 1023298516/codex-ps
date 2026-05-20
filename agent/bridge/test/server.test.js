@@ -612,7 +612,20 @@ test('WebSocket /socket identifies current products and locks the confirmed targ
     assert.match(turns[0][0].text, /识别当前 Photoshop 详情页里的产品/);
     assert.equal(turns[0].filter(item => item.type === 'localImage').length, 1);
     assert.ok(calls.some(call => call.tool === 'photoshop_export_canvas_png'));
-    assert.ok(calls.some(call => /圈选目标组/.test(call.args?.code || '')));
+    assert.equal(calls.some(call => /圈选目标组/.test(call.args?.code || '')), false);
+
+    const detectedPromise = waitForSocketEvent(socket, event => event.type === 'product_target_state' && event.locked === false);
+    server.handleAppServerNotification({
+      method: 'turn/output_text/delta',
+      params: {
+        delta: '{"targets":[{"left":80,"top":330,"right":520,"bottom":620,"reason":"上方鞋子"},{"left":55,"top":660,"right":550,"bottom":1320,"reason":"下方鞋子"}]}'
+      }
+    });
+    await server.handleAppServerNotification({ method: 'turn/completed', params: {} });
+    await detectedPromise;
+    const targetScript = calls.find(call => /圈选目标组/.test(call.args?.code || ''))?.args?.code || '';
+    assert.match(targetScript, /"left":80/);
+    assert.match(targetScript, /"top":660/);
 
     const lockedPromise = waitForSocketEvent(socket, event => event.type === 'product_target_state' && event.locked === true);
     socket.send(JSON.stringify({ type: 'lock_product_target', mode: 'safe-auto' }));

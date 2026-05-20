@@ -9,6 +9,7 @@ import {
   buildProductRetouchInput,
   deleteProductReference,
   listProductReferences,
+  parseProductIdentificationTargets,
   readProductReferenceFile,
   saveProductReference
 } from '../src/product-replacement.js';
@@ -169,9 +170,35 @@ test('builds Codex target identification input for current Photoshop detail page
   assert.match(input[0].text, /识别当前 Photoshop 详情页里的产品/);
   assert.match(input[0].text, /候选目标/);
   assert.match(input[0].text, /人工确认/);
+  assert.match(input[0].text, /JSON/);
+  assert.match(input[0].text, /像素坐标/);
   assert.deepEqual(input.slice(1), [
     { type: 'localImage', path: '/tmp/detail-page.png' }
   ]);
+});
+
+test('parses product identification JSON targets from Codex output', () => {
+  const targets = parseProductIdentificationTargets(`
+识别结果：
+\`\`\`json
+{
+  "targets": [
+    { "name": "上方鞋子", "left": 80, "top": 330, "right": 520, "bottom": 620, "reason": "上方穿着图里的两只鞋" },
+    { "name": "下方鞋子", "bounds": { "left": 55, "top": 660, "right": 550, "bottom": 1320 }, "reason": "下方静物图里的两只鞋" }
+  ]
+}
+\`\`\`
+  `);
+
+  assert.deepEqual(targets, [{
+    name: '目标 01',
+    bounds: { left: 80, top: 330, right: 520, bottom: 620 },
+    reason: '上方穿着图里的两只鞋'
+  }, {
+    name: '目标 02',
+    bounds: { left: 55, top: 660, right: 550, bottom: 1320 },
+    reason: '下方静物图里的两只鞋'
+  }]);
 });
 
 test('builds Codex local retouch input for direct new-layer generation from Photoshop selection', () => {
