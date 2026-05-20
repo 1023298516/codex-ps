@@ -466,22 +466,6 @@ function setProductPreview(image) {
   }
 }
 
-function createProductTarget() {
-  try {
-    sendCommand({ type: 'create_product_target', mode });
-  } catch (error) {
-    addEvent({ type: 'error', message: error.message });
-  }
-}
-
-function readProductTarget() {
-  try {
-    sendCommand({ type: 'read_product_target', mode });
-  } catch (error) {
-    addEvent({ type: 'error', message: error.message });
-  }
-}
-
 function identifyProductTarget() {
   try {
     sendCommand({ type: 'identify_product_target', mode });
@@ -697,11 +681,7 @@ function init() {
 
   document.querySelector('#product-identify-target').addEventListener('click', identifyProductTarget);
 
-  document.querySelector('#product-create-target').addEventListener('click', createProductTarget);
-
-  document.querySelector('#product-read-target').addEventListener('click', readProductTarget);
-
-  document.querySelector('#product-lock-target').addEventListener('click', lockProductTarget);
+  document.querySelector('#product-confirm-target').addEventListener('click', lockProductTarget);
 
   document.querySelector('#product-upload-trigger').addEventListener('click', () => productReferenceInput.click());
 

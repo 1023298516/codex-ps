@@ -73,9 +73,13 @@ test('panel exposes product replacement controls with Chinese copy', async () =>
   assert.match(html, /产品替换/);
   assert.match(html, /目标识别/);
   assert.match(html, /id="product-identify-target"/);
-  assert.match(html, /id="product-create-target"/);
-  assert.match(html, /id="product-read-target"/);
-  assert.match(html, /id="product-lock-target"/);
+  assert.match(html, /一键识别/);
+  assert.match(html, /id="product-confirm-target"/);
+  assert.match(html, /确认目标/);
+  assert.doesNotMatch(html, /id="product-create-target"/);
+  assert.doesNotMatch(html, /id="product-read-target"/);
+  assert.doesNotMatch(html, />新建目标层</);
+  assert.doesNotMatch(html, />重新读取目标</);
   assert.match(html, /id="product-target-status"/);
   assert.match(html, /id="product-reference-input"/);
   assert.match(html, /multiple/);
@@ -90,9 +94,9 @@ test('panel sends product replacement commands to the bridge', async () => {
   assert.match(js, /type: 'upload_product_reference'/);
   assert.match(js, /type: 'list_product_references'/);
   assert.match(js, /type: 'identify_product_target'/);
-  assert.match(js, /type: 'create_product_target'/);
-  assert.match(js, /type: 'read_product_target'/);
   assert.match(js, /type: 'lock_product_target'/);
+  assert.doesNotMatch(js, /type: 'create_product_target'/);
+  assert.doesNotMatch(js, /type: 'read_product_target'/);
   assert.match(js, /type: 'generate_product_replacement_preview'/);
   assert.match(js, /mainReferencePath/);
   assert.match(js, /type: 'import_product_replacement_preview'/);
