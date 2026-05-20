@@ -746,13 +746,13 @@ test('WebSocket /socket generates a product replacement preview then imports it 
     socket.send(JSON.stringify({
       type: 'generate_product_replacement_preview',
       mode: 'safe-auto',
-      replacementMode: 'multi',
       referencePaths: [reference.path],
       mainReferencePath: reference.path
     }));
     await waitForCondition(() => turns.length === 1);
     assert.match(turns[0][0].text, /双向结合/);
-    assert.match(turns[0][0].text, /多方位替换/);
+    assert.match(turns[0][0].text, /按圈选目标替换/);
+    assert.doesNotMatch(turns[0][0].text, /单一替换|多方位替换/);
     assert.match(turns[0][0].text, /圈出的目标/);
     assert.match(turns[0][0].text, /共 2 个目标/);
     assert.match(turns[0][0].text, /目标 01：10, 20, 210, 420/);

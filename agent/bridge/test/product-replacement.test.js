@@ -118,8 +118,8 @@ test('builds Codex image-generation input with anti-hallucination and style-fusi
 
   assert.equal(input[0].type, 'text');
   assert.match(input[0].text, /双向结合/);
-  assert.match(input[0].text, /单一替换/);
-  assert.match(input[0].text, /只替换 1 个主要产品目标/);
+  assert.match(input[0].text, /按圈选目标替换/);
+  assert.doesNotMatch(input[0].text, /单一替换|多方位替换/);
   assert.match(input[0].text, /产品保真/);
   assert.match(input[0].text, /画面融合/);
   assert.match(input[0].text, /主产品图：front\.png/);
@@ -143,7 +143,6 @@ test('builds Codex product replacement input for multi-orientation circled targe
         { layerName: '目标 02', bounds: { left: 260, top: 30, right: 520, bottom: 430 } }
       ]
     },
-    replacementMode: 'multi',
     references: [
       { path: '/tmp/front.png', name: 'front.png', role: 'main' },
       { path: '/tmp/side.png', name: 'side.png' },
@@ -152,7 +151,8 @@ test('builds Codex product replacement input for multi-orientation circled targe
   });
 
   assert.equal(input[0].type, 'text');
-  assert.match(input[0].text, /多方位替换/);
+  assert.match(input[0].text, /按圈选目标替换/);
+  assert.doesNotMatch(input[0].text, /单一替换|多方位替换/);
   assert.match(input[0].text, /圈出的目标/);
   assert.match(input[0].text, /目标图层/);
   assert.match(input[0].text, /共 2 个目标/);
@@ -162,6 +162,7 @@ test('builds Codex product replacement input for multi-orientation circled targe
   assert.match(input[0].text, /逐个替换/);
   assert.match(input[0].text, /方位、角度、透视/);
   assert.match(input[0].text, /正面[\s\S]*侧面[\s\S]*俯视/);
+  assert.doesNotMatch(input[0].text, /替换模式/);
   assert.doesNotMatch(input[0].text, /目标数量/);
   assert.deepEqual(input.slice(1), [
     { type: 'localImage', path: '/tmp/detail-page.png' },

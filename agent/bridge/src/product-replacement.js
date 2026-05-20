@@ -227,23 +227,6 @@ export function parseProductIdentificationTargets(text, { limit = 5 } = {}) {
   return [];
 }
 
-function normalizeReplacementMode(replacementMode) {
-  return replacementMode === 'multi' ? 'multi' : 'single';
-}
-
-function replacementModeText(replacementMode) {
-  if (replacementMode === 'multi') {
-    return [
-      '替换模式：多方位替换。请以 Photoshop 里已经圈出的目标图层为准，逐个替换圈出的目标。',
-      '如果画布里存在多个圈出的目标，请分别匹配每个目标在原详情图里的方位、角度、透视、尺寸、遮挡关系和场景位置。正面替换正面，侧面替换侧面，俯视替换俯视，手持或摆放关系保持原构图。',
-      '必须替换所有目标；不要只替换第一个、最大或最显眼的目标。',
-      '不要根据手动数量猜目标；未圈出的产品位置先保持原样。'
-    ].join('\n');
-  }
-
-  return '替换模式：单一替换。只替换 1 个主要产品目标。';
-}
-
 export function buildProductIdentificationInput({
   canvasPath,
   strictJsonOnly = false
@@ -279,16 +262,16 @@ export function buildProductIdentificationInput({
 export function buildProductReplacementInput({
   canvasPath,
   target,
-  references = [],
-  replacementMode = 'single'
+  references = []
 } = {}) {
   const { mainText, supportText } = productReferenceText(references);
-  const normalizedMode = normalizeReplacementMode(replacementMode);
   const prompt = [
     '请使用 Codex 内置图片生成能力，生成一张 Photoshop 详情页产品替换融合预览图。',
     '',
     '核心原则：双向结合。产品保真，画面融合，二者都不能牺牲。',
-    replacementModeText(normalizedMode),
+    '按圈选目标替换：以 Photoshop 里读取到的目标图层为准。读取到 1 个圈出的目标就替换 1 个；读取到多个圈出的目标就逐个替换所有目标。',
+    '每个目标都要按原详情图里的方位、角度、透视、尺寸、遮挡关系和场景位置分别融合。正面替换正面，侧面替换侧面，俯视替换俯视，手持或摆放关系保持原构图。',
+    '未圈出的产品位置保持原样，不要根据数量或画面猜测额外替换目标。',
     mainText,
     '多方位产品图是产品身份锚点，用来防止幻觉。请严格参考产品外形、结构比例、材质、颜色、反光、文字和 LOGO，不要改形、改色、改材质、改 LOGO，也不要凭空添加不存在的细节。',
     '当前 Photoshop 画布是详情页风格依据。请让替换产品融入原详情页的风格和样式，匹配光影、透视、色调、阴影、清晰度、噪点和边缘过渡，不能像外部图片直接贴上去。',

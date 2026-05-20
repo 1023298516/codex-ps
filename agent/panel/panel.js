@@ -83,7 +83,6 @@ let productRetouchStatus = null;
 let productReferences = [];
 let mainProductReferencePath = null;
 let productPreviewPath = null;
-let productReplacementMode = 'single';
 
 function isTechnicalText(text) {
   return /imagePath|filePath|LayerKind|DocumentMode|Result:|\/Users\/|\{.*[:=].*\}/s.test(text);
@@ -519,14 +518,6 @@ function updateProductSelectionState(event = {}) {
     : '画选区后一键修改';
 }
 
-function updateProductReplacementMode(nextMode = productReplacementMode) {
-  productReplacementMode = nextMode === 'multi' ? 'multi' : 'single';
-
-  document.querySelectorAll('[data-replacement-mode]').forEach(button => {
-    button.classList.toggle('active', button.dataset.replacementMode === productReplacementMode);
-  });
-}
-
 function generateProductPreview() {
   if (!productReferences.length) {
     addEvent({ type: 'error', message: '请先上传产品参考图。' });
@@ -537,7 +528,6 @@ function generateProductPreview() {
     sendCommand({
       type: 'generate_product_replacement_preview',
       mode,
-      replacementMode: productReplacementMode,
       referencePaths: productReferences.map(reference => reference.path),
       mainReferencePath: mainProductReferencePath
     });
@@ -714,12 +704,6 @@ function init() {
   document.querySelector('#product-identify-target').addEventListener('click', identifyProductTarget);
 
   document.querySelector('#product-confirm-target').addEventListener('click', lockProductTarget);
-
-  document.querySelectorAll('[data-replacement-mode]').forEach(button => {
-    button.addEventListener('click', () => updateProductReplacementMode(button.dataset.replacementMode));
-  });
-
-  updateProductReplacementMode('single');
 
   document.querySelector('#product-upload-trigger').addEventListener('click', () => productReferenceInput.click());
 

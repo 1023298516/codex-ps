@@ -139,7 +139,6 @@ button {
 .button:focus-visible,
 .segmented-button:focus-visible,
 .action-button:focus-visible,
-.product-mode-button:focus-visible,
 .gallery-card:focus-visible,
 .gallery-import-one:focus-visible {
   outline: 2px solid var(--focus);
@@ -704,35 +703,6 @@ textarea::placeholder {
 
 .product-upload-row {
   grid-template-columns: 1fr;
-}
-
-.product-replacement-controls {
-  padding: 0 10px 10px;
-  display: block;
-  background: transparent;
-}
-
-.product-mode-switch {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.product-mode-button {
-  min-width: 0;
-  min-height: 30px;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  background: var(--surface-2);
-  color: var(--text-2);
-  font-weight: 800;
-}
-
-.product-mode-button.active {
-  border-color: var(--blue-hover);
-  background: var(--blue);
-  color: #ffffff;
 }
 
 #product-target-status.is-locked {
