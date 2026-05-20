@@ -91,7 +91,23 @@
 
         <div class="product-module-title product-module-title-inline">
           <strong>产品替换</strong>
-          <span>局部融合预览后再导入新图层</span>
+          <span>一键替换后导入新图层</span>
+        </div>
+        <div class="product-replacement-controls">
+          <div class="product-mode-switch" aria-label="替换模式">
+            <button id="product-mode-single" class="product-mode-button active" data-replacement-mode="single" type="button">单一替换</button>
+            <button id="product-mode-multi" class="product-mode-button" data-replacement-mode="multi" type="button">多方位替换</button>
+          </div>
+          <label class="product-count-control" for="product-target-count">
+            <span>目标数量</span>
+            <select id="product-target-count" disabled>
+              <option value="1">1 个</option>
+              <option value="2">2 个</option>
+              <option value="3">3 个</option>
+              <option value="4">4 个</option>
+              <option value="5">5 个</option>
+            </select>
+          </label>
         </div>
         <div class="product-actions">
           <button id="product-upload-trigger" class="button button-secondary" type="button">上传主/参考图</button>

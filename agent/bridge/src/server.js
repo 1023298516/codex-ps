@@ -409,7 +409,9 @@ export function createBridgeServer({
     await appServer.startTurn(buildProductReplacementInput({
       canvasPath,
       target,
-      references
+      references,
+      replacementMode: body.replacementMode,
+      targetCount: body.targetCount
     }));
     if (appServer.threadId) await store?.update?.({ threadId: appServer.threadId });
   }

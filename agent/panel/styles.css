@@ -38,7 +38,8 @@ body {
 }
 
 button,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -138,6 +139,8 @@ button {
 .button:focus-visible,
 .segmented-button:focus-visible,
 .action-button:focus-visible,
+.product-mode-button:focus-visible,
+.product-count-control select:focus-visible,
 .gallery-card:focus-visible,
 .gallery-import-one:focus-visible {
   outline: 2px solid var(--focus);
@@ -658,6 +661,66 @@ textarea::placeholder {
 .product-module-title span {
   color: var(--text-3);
   font-size: 11px;
+}
+
+.product-replacement-controls {
+  padding: 10px 12px 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.product-mode-switch {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.product-mode-button {
+  min-width: 0;
+  min-height: 30px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-weight: 800;
+}
+
+.product-mode-button.active {
+  border-color: var(--blue-hover);
+  background: var(--blue);
+  color: #ffffff;
+}
+
+.product-count-control {
+  min-width: 92px;
+  display: grid;
+  gap: 4px;
+}
+
+.product-count-control span {
+  color: var(--text-3);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 12px;
+}
+
+.product-count-control select {
+  width: 100%;
+  min-height: 30px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 800;
+}
+
+.product-count-control select:disabled {
+  color: var(--text-3);
+  opacity: 0.58;
 }
 
 #product-target-status.is-locked {

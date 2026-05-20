@@ -91,6 +91,8 @@ test('builds Codex image-generation input with anti-hallucination and style-fusi
 
   assert.equal(input[0].type, 'text');
   assert.match(input[0].text, /双向结合/);
+  assert.match(input[0].text, /单一替换/);
+  assert.match(input[0].text, /只替换 1 个主要产品目标/);
   assert.match(input[0].text, /产品保真/);
   assert.match(input[0].text, /画面融合/);
   assert.match(input[0].text, /主产品图：front\.png/);
@@ -102,6 +104,42 @@ test('builds Codex image-generation input with anti-hallucination and style-fusi
     { type: 'localImage', path: '/tmp/front.png' },
     { type: 'localImage', path: '/tmp/side.png' }
   ]);
+});
+
+test('builds Codex product replacement input for multi-orientation one-to-five targets', () => {
+  const input = buildProductReplacementInput({
+    canvasPath: '/tmp/detail-page.png',
+    target: { bounds: { left: 10, top: 20, right: 210, bottom: 420 } },
+    replacementMode: 'multi',
+    targetCount: 5,
+    references: [
+      { path: '/tmp/front.png', name: 'front.png', role: 'main' },
+      { path: '/tmp/side.png', name: 'side.png' },
+      { path: '/tmp/top.png', name: 'top.png' }
+    ]
+  });
+
+  assert.equal(input[0].type, 'text');
+  assert.match(input[0].text, /多方位替换/);
+  assert.match(input[0].text, /目标数量：5/);
+  assert.match(input[0].text, /同时替换/);
+  assert.match(input[0].text, /方位、角度、透视/);
+  assert.match(input[0].text, /正面[\s\S]*侧面[\s\S]*俯视/);
+  assert.deepEqual(input.slice(1), [
+    { type: 'localImage', path: '/tmp/detail-page.png' },
+    { type: 'localImage', path: '/tmp/front.png' },
+    { type: 'localImage', path: '/tmp/side.png' },
+    { type: 'localImage', path: '/tmp/top.png' }
+  ]);
+});
+
+test('clamps multi-orientation product target count to one to five', () => {
+  const input = buildProductReplacementInput({
+    replacementMode: 'multi',
+    targetCount: 9
+  });
+
+  assert.match(input[0].text, /目标数量：5/);
 });
 
 test('builds Codex target identification input for current Photoshop detail page', () => {

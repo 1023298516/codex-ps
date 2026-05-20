@@ -80,9 +80,12 @@ let productPreviewImage = null;
 let productPreviewStatus = null;
 let productImportPreview = null;
 let productRetouchStatus = null;
+let productTargetCountInput = null;
 let productReferences = [];
 let mainProductReferencePath = null;
 let productPreviewPath = null;
+let productReplacementMode = 'single';
+let productReplacementTargetCount = 1;
 
 function isTechnicalText(text) {
   return /imagePath|filePath|LayerKind|DocumentMode|Result:|\/Users\/|\{.*[:=].*\}/s.test(text);
@@ -496,6 +499,27 @@ function updateProductSelectionState(event = {}) {
     : '画选区后一键修改';
 }
 
+function updateProductReplacementMode(nextMode = productReplacementMode) {
+  productReplacementMode = nextMode === 'multi' ? 'multi' : 'single';
+  if (productReplacementMode === 'single') productReplacementTargetCount = 1;
+
+  document.querySelectorAll('[data-replacement-mode]').forEach(button => {
+    button.classList.toggle('active', button.dataset.replacementMode === productReplacementMode);
+  });
+
+  if (productTargetCountInput) {
+    productTargetCountInput.disabled = productReplacementMode !== 'multi';
+    if (productReplacementMode === 'single') productTargetCountInput.value = '1';
+    productReplacementTargetCount = Number.parseInt(productTargetCountInput.value, 10) || 1;
+  }
+}
+
+function updateProductTargetCount(value) {
+  const count = Number.parseInt(value, 10);
+  productReplacementTargetCount = Math.min(5, Math.max(1, Number.isFinite(count) ? count : 1));
+  if (productTargetCountInput) productTargetCountInput.value = String(productReplacementTargetCount);
+}
+
 function generateProductPreview() {
   if (!productReferences.length) {
     addEvent({ type: 'error', message: '请先上传产品参考图。' });
@@ -506,6 +530,8 @@ function generateProductPreview() {
     sendCommand({
       type: 'generate_product_replacement_preview',
       mode,
+      replacementMode: productReplacementMode,
+      targetCount: productReplacementTargetCount,
       referencePaths: productReferences.map(reference => reference.path),
       mainReferencePath: mainProductReferencePath
     });
@@ -647,6 +673,7 @@ function init() {
   productPreviewStatus = document.querySelector('#product-preview-status');
   productImportPreview = document.querySelector('#product-import-preview');
   productRetouchStatus = document.querySelector('#product-retouch-status');
+  productTargetCountInput = document.querySelector('#product-target-count');
 
   document.querySelectorAll('[data-mode]').forEach(button => {
     button.addEventListener('click', () => {
@@ -682,6 +709,13 @@ function init() {
   document.querySelector('#product-identify-target').addEventListener('click', identifyProductTarget);
 
   document.querySelector('#product-confirm-target').addEventListener('click', lockProductTarget);
+
+  document.querySelectorAll('[data-replacement-mode]').forEach(button => {
+    button.addEventListener('click', () => updateProductReplacementMode(button.dataset.replacementMode));
+  });
+
+  productTargetCountInput.addEventListener('change', event => updateProductTargetCount(event.target.value));
+  updateProductReplacementMode('single');
 
   document.querySelector('#product-upload-trigger').addEventListener('click', () => productReferenceInput.click());
 

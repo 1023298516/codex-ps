@@ -85,6 +85,15 @@ test('panel exposes product replacement controls with Chinese copy', async () =>
   assert.match(html, /multiple/);
   assert.match(html, /accept="image\/\*"/);
   assert.match(html, /主产品图/);
+  assert.match(html, /id="product-mode-single"/);
+  assert.match(html, /单一替换/);
+  assert.match(html, /id="product-mode-multi"/);
+  assert.match(html, /多方位替换/);
+  assert.match(html, /id="product-target-count"/);
+  assert.match(html, /目标数量/);
+  for (const count of ['1', '2', '3', '4', '5']) {
+    assert.match(html, new RegExp(`<option value="${count}"`));
+  }
   assert.match(html, /id="product-generate-preview"/);
   assert.match(html, /一键替换/);
   assert.doesNotMatch(html, /生成局部融合预览/);
@@ -100,6 +109,10 @@ test('panel sends product replacement commands to the bridge', async () => {
   assert.doesNotMatch(js, /type: 'create_product_target'/);
   assert.doesNotMatch(js, /type: 'read_product_target'/);
   assert.match(js, /type: 'generate_product_replacement_preview'/);
+  assert.match(js, /productReplacementMode/);
+  assert.match(js, /productReplacementTargetCount/);
+  assert.match(js, /replacementMode: productReplacementMode/);
+  assert.match(js, /targetCount: productReplacementTargetCount/);
   assert.match(js, /mainReferencePath/);
   assert.match(js, /type: 'import_product_replacement_preview'/);
   assert.match(js, /event\.type === 'product_references'/);
