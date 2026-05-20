@@ -509,15 +509,7 @@ function updateProductSelectionState(event = {}) {
   const bounds = event.target?.bounds;
   productRetouchStatus.textContent = bounds
     ? '当前选区已读取'
-    : '使用 Photoshop 当前选区';
-}
-
-function readProductSelection() {
-  try {
-    sendCommand({ type: 'read_product_selection', mode });
-  } catch (error) {
-    addEvent({ type: 'error', message: error.message });
-  }
+    : '画选区后一键修改';
 }
 
 function generateProductPreview() {
@@ -721,8 +713,6 @@ function init() {
   document.querySelector('#product-generate-preview').addEventListener('click', generateProductPreview);
 
   productImportPreview.addEventListener('click', importProductPreview);
-
-  document.querySelector('#product-read-selection').addEventListener('click', readProductSelection);
 
   document.querySelector('#product-generate-retouch').addEventListener('click', generateProductRetouchLayer);
 

@@ -728,12 +728,6 @@ test('WebSocket /socket generates a local retouch layer directly from the curren
   try {
     await waitForOpenSocket(socket);
 
-    const selectionPromise = waitForSocketEvent(socket, event => event.type === 'product_selection_state');
-    socket.send(JSON.stringify({ type: 'read_product_selection', mode: 'safe-auto' }));
-    const selection = await selectionPromise;
-    assert.equal(selection.target.bounds.left, 30);
-    assert.equal(selection.target.bounds.bottom, 260);
-
     socket.send(JSON.stringify({
       type: 'generate_product_retouch_layer',
       mode: 'safe-auto',
@@ -745,6 +739,8 @@ test('WebSocket /socket generates a local retouch layer directly from the curren
     assert.match(turns[0][0].text, /Photoshop 当前选区/);
     assert.match(turns[0][0].text, /直接导入为新建返修图层/);
     assert.doesNotMatch(turns[0][0].text, /预览/);
+    assert.equal(calls[0].tool, 'photoshop_execute_script');
+    assert.match(calls[0].args.code, /doc\.selection\.bounds/);
 
     const threadDir = join(imageDir, 'thread');
     await mkdir(threadDir);
