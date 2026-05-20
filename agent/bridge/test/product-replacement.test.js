@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   buildProductReplacementInput,
+  buildProductRetouchInput,
   listProductReferences,
   readProductReferenceFile,
   saveProductReference
@@ -97,5 +98,26 @@ test('builds Codex image-generation input with anti-hallucination and style-fusi
     { type: 'localImage', path: '/tmp/detail-page.png' },
     { type: 'localImage', path: '/tmp/front.png' },
     { type: 'localImage', path: '/tmp/side.png' }
+  ]);
+});
+
+test('builds Codex local retouch input that keeps edits isolated to a new layer', () => {
+  const input = buildProductRetouchInput({
+    canvasPath: '/tmp/detail-page-current.png',
+    target: { bounds: { left: 30, top: 40, right: 180, bottom: 260 } },
+    references: [
+      { path: '/tmp/front.png', name: 'front.png' }
+    ]
+  });
+
+  assert.equal(input[0].type, 'text');
+  assert.match(input[0].text, /局部返修/);
+  assert.match(input[0].text, /只处理返修区域/);
+  assert.match(input[0].text, /新建返修图层/);
+  assert.match(input[0].text, /不要覆盖原详情图/);
+  assert.match(input[0].text, /30, 40, 180, 260/);
+  assert.deepEqual(input.slice(1), [
+    { type: 'localImage', path: '/tmp/detail-page-current.png' },
+    { type: 'localImage', path: '/tmp/front.png' }
   ]);
 });

@@ -13,6 +13,9 @@ const SAFE_AUTO_ALLOWED = new Set([
   'read_product_target_layer',
   'export_canvas',
   'prepare_replacement_result_layer',
+  'create_retouch_target_layer',
+  'read_retouch_target_layer',
+  'prepare_retouch_result_layer',
   'rename_new_layer',
   'transform_new_or_selected_layer',
   'selection_to_new_layer_result'

@@ -644,6 +644,82 @@ test('WebSocket /socket generates a product replacement preview then imports it 
   }
 });
 
+test('WebSocket /socket generates a local retouch preview then imports it as a new retouch layer', async () => {
+  const imageDir = await mkdtemp(join(tmpdir(), 'codex-ps-generated-'));
+  const referenceDir = await mkdtemp(join(tmpdir(), 'codex-ps-product-refs-'));
+  const reference = await saveProductReference({
+    referenceDir,
+    name: 'front.png',
+    mimeType: 'image/png',
+    data: Buffer.from('front').toString('base64')
+  });
+  const turns = [];
+  const calls = [];
+  const server = createBridgeServer({
+    appServer: {
+      async startTurn(input) {
+        turns.push(input);
+        return { turn: { id: 'turn-1' } };
+      },
+      async callMcpTool(serverName, tool, args) {
+        calls.push({ server: serverName, tool, args });
+        if (tool === 'photoshop_export_canvas_png') {
+          await writeFile(args.outputPath, 'canvas', 'utf8');
+        }
+        return { content: [{ type: 'text', text: `${tool}: ok left: 30 top: 40 right: 180 bottom: 260` }] };
+      }
+    },
+    codexImageDir: imageDir,
+    productReferenceDir: referenceDir,
+    imageWaitTimeoutMs: 100
+  });
+  const listener = await server.listen(0);
+  const socket = new WebSocket(`ws://127.0.0.1:${listener.address().port}/socket`);
+  try {
+    await waitForOpenSocket(socket);
+
+    socket.send(JSON.stringify({ type: 'create_retouch_target', mode: 'safe-auto' }));
+    await waitForSocketEvent(socket, event => event.type === 'assistant_delta' && /返修区域 01/.test(event.text || ''));
+
+    socket.send(JSON.stringify({
+      type: 'generate_product_retouch_preview',
+      mode: 'safe-auto',
+      referencePaths: [reference.path]
+    }));
+    await waitForCondition(() => turns.length === 1);
+    assert.match(turns[0][0].text, /局部返修/);
+    assert.match(turns[0][0].text, /新建返修图层/);
+
+    const threadDir = join(imageDir, 'thread');
+    await mkdir(threadDir);
+    const previewPath = join(threadDir, 'retouch.png');
+    await writeFile(previewPath, 'retouch', 'utf8');
+
+    const previewPromise = waitForSocketEvent(socket, event => event.type === 'product_retouch_preview');
+    await server.handleAppServerNotification({ method: 'turn/completed', params: {} });
+    const preview = await previewPromise;
+    assert.equal(preview.image.path, previewPath);
+    assert.match(preview.image.previewUrl, /^\/gallery-image\?path=/);
+
+    socket.send(JSON.stringify({
+      type: 'import_product_retouch_preview',
+      mode: 'safe-auto',
+      path: previewPath
+    }));
+    await waitForCondition(() => calls.some(call => /局部返修组/.test(call.args?.code || '')));
+    assert.deepEqual(calls.slice(-3).map(call => call.tool), [
+      'photoshop_place_image',
+      'photoshop_fit_layer_to_document',
+      'photoshop_execute_script'
+    ]);
+  } finally {
+    socket.close();
+    await server.close();
+    await rm(imageDir, { recursive: true, force: true });
+    await rm(referenceDir, { recursive: true, force: true });
+  }
+});
+
 test('WebSocket /socket accepts a panel chat message', async () => {
   const calls = [];
   const server = createBridgeServer({

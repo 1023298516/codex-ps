@@ -360,6 +360,10 @@ textarea::placeholder {
   overflow: hidden;
 }
 
+.product-dialog {
+  overflow-y: auto;
+}
+
 .gallery-header,
 .gallery-footer,
 .preview-header,
@@ -707,9 +711,25 @@ textarea::placeholder {
   white-space: nowrap;
 }
 
-.product-preview {
+.product-preview,
+.product-retouch {
   border-top: 1px solid var(--border);
   background: var(--panel);
+}
+
+.product-retouch {
+  background: var(--surface);
+}
+
+.product-retouch-actions {
+  padding: 10px 12px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.product-retouch-actions .button {
+  flex: 1 1 98px;
 }
 
 .product-preview-header {

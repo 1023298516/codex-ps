@@ -164,3 +164,31 @@ export function buildProductReplacementInput({
     ...references.map(reference => ({ type: 'localImage', path: reference.path }))
   ];
 }
+
+export function buildProductRetouchInput({
+  canvasPath,
+  target,
+  references = []
+} = {}) {
+  const referenceList = references.map((reference, index) => `${index + 1}. ${reference.name || basename(reference.path)}`).join('\n');
+  const prompt = [
+    '请使用 Codex 内置图片生成能力，生成一张 Photoshop 局部返修预览图。',
+    '',
+    '核心原则：只处理返修区域，区域外保持当前画布一致。返修结果后续会作为新建返修图层导入 Photoshop，用于随时隐藏、删除或回退。',
+    '不要覆盖原详情图，不要覆盖已有替换结果层，不要重绘整张详情页。只修复人工圈出的不满意部位，例如边缘、阴影、反光、透视、质感、色差或局部遮挡。',
+    '如果返修区域涉及产品本体，请继续以产品参考图为产品身份锚点，保持外形、结构比例、材质、颜色、文字和 LOGO，不要凭空改产品。',
+    '同时要贴合当前详情页的风格、光影、透视、清晰度、噪点和边缘过渡。',
+    targetText(target).replace('目标区域', '返修区域'),
+    '',
+    '参考产品图：',
+    referenceList || '未上传参考图；请优先根据当前画布局部上下文进行自然返修。',
+    '',
+    '输出要求：只生成一张局部返修预览图，不要写说明文字。'
+  ].join('\n');
+
+  return [
+    { type: 'text', text: prompt },
+    ...(canvasPath ? [{ type: 'localImage', path: canvasPath }] : []),
+    ...references.map(reference => ({ type: 'localImage', path: reference.path }))
+  ];
+}

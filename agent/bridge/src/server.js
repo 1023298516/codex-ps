@@ -9,6 +9,7 @@ import { latestCodexImage, listCodexImages, readCodexImageFile, waitForLatestCod
 import {
   DEFAULT_PRODUCT_REFERENCE_DIR,
   buildProductReplacementInput,
+  buildProductRetouchInput,
   listProductReferences,
   readProductReferenceFile,
   saveProductReference
@@ -125,7 +126,9 @@ export function createBridgeServer({
   const webSocketServer = new WebSocketServer({ noServer: true });
   const pendingCodexImageImports = [];
   const pendingProductReplacementPreviews = [];
+  const pendingProductRetouchPreviews = [];
   let latestProductReplacementPreview = null;
+  let latestProductRetouchPreview = null;
 
   function broadcast(event) {
     for (const res of sseClients) res.write(serializeSse(event));
@@ -276,6 +279,29 @@ export function createBridgeServer({
     return targetFromToolResult(result);
   }
 
+  async function createRetouchTarget(mode = 'safe-auto') {
+    const tools = createPhotoshopTools({ appServer, mode: normalizeMode(mode) });
+    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'create_retouch_target_layer', status: 'started' }));
+    const result = await tools.createRetouchTargetLayer();
+    if (result?.isError) {
+      broadcast(panelEvent('error', { message: shortenTechnicalText(textFromToolResult(result)), details: result }));
+      return;
+    }
+    broadcast(panelEvent('assistant_delta', { text: '已新建返修区域图层：返修区域组 / 返修区域 01。请在 Photoshop 里移动或缩放到不满意的位置。' }));
+  }
+
+  async function readRetouchTarget(mode = 'safe-auto') {
+    const tools = createPhotoshopTools({ appServer, mode: normalizeMode(mode) });
+    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'read_retouch_target_layer', status: 'started' }));
+    const result = await tools.readRetouchTargetLayer();
+    if (result?.isError) {
+      broadcast(panelEvent('error', { message: '没有找到返修区域图层，请先新建或手动画出“返修区域 01”。', details: result }));
+      return null;
+    }
+    broadcast(panelEvent('assistant_delta', { text: '已读取返修区域：返修区域 01。局部返修会按这个区域生成，并导入为新图层。' }));
+    return targetFromToolResult(result);
+  }
+
   async function generateProductReplacementPreview(body = {}) {
     const mode = normalizeMode(body.mode);
     const references = await productReferencesForPaths(body.referencePaths);
@@ -349,6 +375,74 @@ export function createBridgeServer({
     broadcast(panelEvent('assistant_delta', { text: `已导入替换结果 01，新图层已保留，原详情图未被覆盖。` }));
   }
 
+  async function generateProductRetouchPreview(body = {}) {
+    const mode = normalizeMode(body.mode);
+    const references = await productReferencesForPaths(body.referencePaths);
+    const tools = createPhotoshopTools({ appServer, mode });
+    const canvasPath = join(productReferenceDir, 'retouch-exports', `detail-page-current-${Date.now()}.png`);
+    await mkdir(dirname(canvasPath), { recursive: true });
+    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'export_canvas', status: 'started' }));
+    const exportResult = await tools.exportCanvasPng({ outputPath: canvasPath });
+    if (exportResult?.isError) {
+      broadcast(panelEvent('error', { message: shortenTechnicalText(textFromToolResult(exportResult)), details: exportResult }));
+      return;
+    }
+
+    const targetResult = await tools.readRetouchTargetLayer();
+    if (targetResult?.isError) {
+      broadcast(panelEvent('error', { message: '没有找到返修区域图层，请先新建或手动画出“返修区域 01”。', details: targetResult }));
+      return;
+    }
+
+    const startedAtMs = Date.now();
+    pendingProductRetouchPreviews.push({ startedAtMs, mode, canvasPath });
+    broadcast(panelEvent('tool_event', { server: 'codex', tool: 'product_retouch_preview', status: 'started' }));
+    await appServer.startTurn(buildProductRetouchInput({
+      canvasPath,
+      target: targetFromToolResult(targetResult),
+      references
+    }));
+    if (appServer.threadId) await store?.update?.({ threadId: appServer.threadId });
+  }
+
+  async function finishProductRetouchPreview(request) {
+    const image = await waitForLatestCodexImage({
+      searchDir: codexImageDir,
+      afterMs: request.startedAtMs,
+      timeoutMs: imageWaitTimeoutMs
+    });
+    if (!image) {
+      broadcast(panelEvent('error', { message: 'Codex 已完成回复，但没有检测到新的局部返修预览图。可以重新生成一次。' }));
+      return;
+    }
+
+    latestProductRetouchPreview = {
+      ...image,
+      name: imageFileLabel(image.path),
+      previewUrl: `/gallery-image?path=${encodeURIComponent(image.path)}`
+    };
+    broadcast(panelEvent('product_retouch_preview', { image: latestProductRetouchPreview }));
+  }
+
+  async function importProductRetouchPreview({ path, mode = 'safe-auto' } = {}) {
+    const filePath = path || latestProductRetouchPreview?.path;
+    if (!filePath) {
+      broadcast(panelEvent('error', { message: '还没有可导入的局部返修预览图。' }));
+      return;
+    }
+    await readCodexImageFile({ searchDir: codexImageDir, filePath });
+    const tools = createPhotoshopTools({ appServer, mode: normalizeMode(mode) });
+    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'import_product_retouch_preview', status: 'started' }));
+    const placeResult = await tools.placeImage({ filePath });
+    if (placeResult?.isError) {
+      broadcast(panelEvent('error', { message: `局部返修预览导入失败：${shortenTechnicalText(textFromToolResult(placeResult))}`, details: placeResult }));
+      return;
+    }
+    await tools.fitActiveLayerToDocument({ fillDocument: true });
+    await tools.prepareRetouchResultLayer({ layerName: '返修 01' });
+    broadcast(panelEvent('assistant_delta', { text: '已导入返修 01，新建在局部返修组里；原图和替换结果都没有被覆盖。' }));
+  }
+
   async function handlePanelChat(body) {
     const mode = normalizeMode(body.mode);
     await store?.update?.({ mode });
@@ -407,6 +501,14 @@ export function createBridgeServer({
       const request = pendingProductReplacementPreviews.shift();
       try {
         await finishProductReplacementPreview(request);
+      } catch (error) {
+        broadcast(panelEvent('error', { message: error.message }));
+      }
+    }
+    if (pendingProductRetouchPreviews.length > 0) {
+      const request = pendingProductRetouchPreviews.shift();
+      try {
+        await finishProductRetouchPreview(request);
       } catch (error) {
         broadcast(panelEvent('error', { message: error.message }));
       }
@@ -530,6 +632,16 @@ export function createBridgeServer({
           return;
         }
 
+        if (body.type === 'create_retouch_target') {
+          await createRetouchTarget(body.mode);
+          return;
+        }
+
+        if (body.type === 'read_retouch_target') {
+          await readRetouchTarget(body.mode);
+          return;
+        }
+
         if (body.type === 'generate_product_replacement_preview') {
           await generateProductReplacementPreview(body);
           return;
@@ -537,6 +649,16 @@ export function createBridgeServer({
 
         if (body.type === 'import_product_replacement_preview') {
           await importProductReplacementPreview(body);
+          return;
+        }
+
+        if (body.type === 'generate_product_retouch_preview') {
+          await generateProductRetouchPreview(body);
+          return;
+        }
+
+        if (body.type === 'import_product_retouch_preview') {
+          await importProductRetouchPreview(body);
           return;
         }
 

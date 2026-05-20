@@ -5,6 +5,10 @@ const TARGET_GROUP_NAME = '圈选目标组';
 const TARGET_LAYER_NAME = '目标 01';
 const RESULT_GROUP_NAME = '替换结果组';
 const RESULT_LAYER_NAME = '替换结果 01';
+const RETOUCH_TARGET_GROUP_NAME = '返修区域组';
+const RETOUCH_TARGET_LAYER_NAME = '返修区域 01';
+const RETOUCH_RESULT_GROUP_NAME = '局部返修组';
+const RETOUCH_RESULT_LAYER_NAME = '返修 01';
 
 function quoted(value) {
   return JSON.stringify(String(value));
@@ -106,9 +110,9 @@ return {
 `;
 }
 
-function prepareReplacementResultLayerScript({
-  groupName = RESULT_GROUP_NAME,
-  layerName = RESULT_LAYER_NAME
+function prepareLayerInGroupScript({
+  groupName,
+  layerName
 } = {}) {
   return `
 if (app.documents.length === 0) {
@@ -141,6 +145,20 @@ return {
   layerName: layerName
 };
 `;
+}
+
+function prepareReplacementResultLayerScript({
+  groupName = RESULT_GROUP_NAME,
+  layerName = RESULT_LAYER_NAME
+} = {}) {
+  return prepareLayerInGroupScript({ groupName, layerName });
+}
+
+function prepareRetouchResultLayerScript({
+  groupName = RETOUCH_RESULT_GROUP_NAME,
+  layerName = RETOUCH_RESULT_LAYER_NAME
+} = {}) {
+  return prepareLayerInGroupScript({ groupName, layerName });
 }
 
 export function createPhotoshopTools({ appServer, mode = 'safe-auto', protectionReady = false } = {}) {
@@ -206,6 +224,25 @@ export function createPhotoshopTools({ appServer, mode = 'safe-auto', protection
       });
     },
 
+    async createRetouchTargetLayer(args = {}) {
+      allowed('create_retouch_target_layer');
+      return appServer.callMcpTool(PHOTOSHOP_SERVER, 'photoshop_execute_script', {
+        code: createTargetLayerScript({
+          groupName: args.groupName || RETOUCH_TARGET_GROUP_NAME,
+          layerName: args.layerName || RETOUCH_TARGET_LAYER_NAME
+        })
+      });
+    },
+
+    async readRetouchTargetLayer(args = {}) {
+      allowed('read_retouch_target_layer');
+      return appServer.callMcpTool(PHOTOSHOP_SERVER, 'photoshop_execute_script', {
+        code: readTargetLayerScript({
+          layerName: args.layerName || RETOUCH_TARGET_LAYER_NAME
+        })
+      });
+    },
+
     async exportCanvasPng(args = {}) {
       allowed('export_canvas');
       return appServer.callMcpTool(PHOTOSHOP_SERVER, 'photoshop_export_canvas_png', {
@@ -217,6 +254,13 @@ export function createPhotoshopTools({ appServer, mode = 'safe-auto', protection
       allowed('prepare_replacement_result_layer');
       return appServer.callMcpTool(PHOTOSHOP_SERVER, 'photoshop_execute_script', {
         code: prepareReplacementResultLayerScript(args)
+      });
+    },
+
+    async prepareRetouchResultLayer(args = {}) {
+      allowed('prepare_retouch_result_layer');
+      return appServer.callMcpTool(PHOTOSHOP_SERVER, 'photoshop_execute_script', {
+        code: prepareRetouchResultLayerScript(args)
       });
     },
 

@@ -92,6 +92,19 @@ test('panel sends product replacement commands to the bridge', async () => {
   assert.match(js, /event\.type === 'product_replacement_preview'/);
 });
 
+test('panel exposes local retouch controls that import repairs as new layers', async () => {
+  const html = await readFile('agent/panel/index.html', 'utf8');
+  const js = await readFile('agent/panel/panel.js', 'utf8');
+  assert.match(html, /局部返修/);
+  assert.match(html, /id="product-create-retouch"/);
+  assert.match(html, /id="product-generate-retouch"/);
+  assert.match(html, /id="product-import-retouch"/);
+  assert.match(js, /type: 'create_retouch_target'/);
+  assert.match(js, /type: 'generate_product_retouch_preview'/);
+  assert.match(js, /type: 'import_product_retouch_preview'/);
+  assert.match(js, /event\.type === 'product_retouch_preview'/);
+});
+
 test('panel styles product replacement UI as a compact Photoshop tool surface', async () => {
   const css = await readFile('agent/panel/styles.css', 'utf8');
   assert.match(css, /\.product-modal/);

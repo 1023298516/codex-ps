@@ -104,6 +104,31 @@ test('safe-auto prepares the imported replacement result as a named result layer
   assert.match(appServer.calls[0].args.code, /替换结果 01/);
 });
 
+test('safe-auto creates and reads a visible local retouch target layer', async () => {
+  const appServer = fakeAppServer();
+  const tools = createPhotoshopTools({ appServer, mode: 'safe-auto' });
+  await tools.createRetouchTargetLayer();
+  await tools.readRetouchTargetLayer();
+
+  assert.equal(appServer.calls[0].tool, 'photoshop_execute_script');
+  assert.match(appServer.calls[0].args.code, /返修区域组/);
+  assert.match(appServer.calls[0].args.code, /返修区域 01/);
+  assert.equal(appServer.calls[1].tool, 'photoshop_execute_script');
+  assert.match(appServer.calls[1].args.code, /返修区域 01/);
+  assert.match(appServer.calls[1].args.code, /bounds/);
+});
+
+test('safe-auto prepares imported local retouch output as an independent retouch layer', async () => {
+  const appServer = fakeAppServer();
+  const tools = createPhotoshopTools({ appServer, mode: 'safe-auto' });
+  await tools.prepareRetouchResultLayer({ layerName: '返修 01' });
+
+  assert.equal(appServer.calls[0].server, 'photoshop');
+  assert.equal(appServer.calls[0].tool, 'photoshop_execute_script');
+  assert.match(appServer.calls[0].args.code, /局部返修组/);
+  assert.match(appServer.calls[0].args.code, /返修 01/);
+});
+
 test('safe-auto blocks destructive actions', async () => {
   const tools = createPhotoshopTools({ appServer: fakeAppServer(), mode: 'safe-auto' });
   await assert.rejects(() => tools.deleteLayer({ layerId: 7 }), /delete_layer blocked in B safe-auto mode/);

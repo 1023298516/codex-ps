@@ -33,6 +33,18 @@ const TOOL_LABELS = {
   },
   import_product_replacement_preview: {
     started: '正在导入替换结果...'
+  },
+  create_retouch_target_layer: {
+    started: '正在新建返修区域...'
+  },
+  read_retouch_target_layer: {
+    started: '正在读取返修区域...'
+  },
+  product_retouch_preview: {
+    started: '正在生成局部返修预览...'
+  },
+  import_product_retouch_preview: {
+    started: '正在导入返修图层...'
   }
 };
 
@@ -66,8 +78,12 @@ let productReferenceCount = null;
 let productPreviewImage = null;
 let productPreviewStatus = null;
 let productImportPreview = null;
+let productRetouchPreviewImage = null;
+let productRetouchPreviewStatus = null;
+let productImportRetouch = null;
 let productReferences = [];
 let productPreviewPath = null;
+let productRetouchPreviewPath = null;
 
 function isTechnicalText(text) {
   return /imagePath|filePath|LayerKind|DocumentMode|Result:|\/Users\/|\{.*[:=].*\}/s.test(text);
@@ -435,6 +451,17 @@ function setProductPreview(image) {
   }
 }
 
+function setProductRetouchPreview(image) {
+  productRetouchPreviewPath = image?.path || null;
+  if (productRetouchPreviewImage) productRetouchPreviewImage.src = image ? galleryImageUrl(image) : '';
+  if (productRetouchPreviewStatus) productRetouchPreviewStatus.textContent = image ? '已生成' : '未生成';
+  if (productImportRetouch) {
+    productImportRetouch.toggleAttribute('disabled', !productRetouchPreviewPath);
+    productImportRetouch.classList.toggle('button-primary', Boolean(productRetouchPreviewPath));
+    productImportRetouch.classList.toggle('button-secondary', !productRetouchPreviewPath);
+  }
+}
+
 function createProductTarget() {
   try {
     sendCommand({ type: 'create_product_target', mode });
@@ -446,6 +473,14 @@ function createProductTarget() {
 function readProductTarget() {
   try {
     sendCommand({ type: 'read_product_target', mode });
+  } catch (error) {
+    addEvent({ type: 'error', message: error.message });
+  }
+}
+
+function createRetouchTarget() {
+  try {
+    sendCommand({ type: 'create_retouch_target', mode });
   } catch (error) {
     addEvent({ type: 'error', message: error.message });
   }
@@ -478,6 +513,35 @@ function importProductPreview() {
       type: 'import_product_replacement_preview',
       mode,
       path: productPreviewPath
+    });
+  } catch (error) {
+    addEvent({ type: 'error', message: error.message });
+  }
+}
+
+function generateProductRetouchPreview() {
+  setProductRetouchPreview(null);
+  try {
+    sendCommand({
+      type: 'generate_product_retouch_preview',
+      mode,
+      referencePaths: productReferences.map(reference => reference.path)
+    });
+  } catch (error) {
+    addEvent({ type: 'error', message: error.message });
+  }
+}
+
+function importProductRetouchPreview() {
+  if (!productRetouchPreviewPath) {
+    addEvent({ type: 'error', message: '请先生成局部返修预览。' });
+    return;
+  }
+  try {
+    sendCommand({
+      type: 'import_product_retouch_preview',
+      mode,
+      path: productRetouchPreviewPath
     });
   } catch (error) {
     addEvent({ type: 'error', message: error.message });
@@ -530,6 +594,11 @@ function connectBridge() {
         addEvent({ type: 'assistant_delta', text: '融合预览已生成，确认后可导入画布。' });
         return;
       }
+      if (event.type === 'product_retouch_preview') {
+        setProductRetouchPreview(event.image);
+        addEvent({ type: 'assistant_delta', text: '局部返修预览已生成，确认后会导入为新返修图层。' });
+        return;
+      }
       addEvent(event);
     } catch (error) {
       addEvent({ type: 'error', message: error.message });
@@ -569,6 +638,9 @@ function init() {
   productPreviewImage = document.querySelector('#product-preview-image');
   productPreviewStatus = document.querySelector('#product-preview-status');
   productImportPreview = document.querySelector('#product-import-preview');
+  productRetouchPreviewImage = document.querySelector('#product-retouch-preview-image');
+  productRetouchPreviewStatus = document.querySelector('#product-retouch-preview-status');
+  productImportRetouch = document.querySelector('#product-import-retouch');
 
   document.querySelectorAll('[data-mode]').forEach(button => {
     button.addEventListener('click', () => {
@@ -616,6 +688,12 @@ function init() {
 
   productImportPreview.addEventListener('click', importProductPreview);
 
+  document.querySelector('#product-create-retouch').addEventListener('click', createRetouchTarget);
+
+  document.querySelector('#product-generate-retouch').addEventListener('click', generateProductRetouchPreview);
+
+  productImportRetouch.addEventListener('click', importProductRetouchPreview);
+
   document.querySelector('#gallery-close').addEventListener('click', closeGallery);
 
   document.querySelector('#gallery-refresh').addEventListener('click', requestGallery);
@@ -651,6 +729,7 @@ function init() {
   updateGallerySelection();
   renderProductReferences([]);
   setProductPreview(null);
+  setProductRetouchPreview(null);
   connectBridge();
 }
 
