@@ -782,7 +782,7 @@ textarea::placeholder {
 }
 
 .product-retouch-actions {
-  padding: 10px 12px 0;
+  padding: 10px 12px 12px;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

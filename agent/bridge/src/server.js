@@ -127,9 +127,8 @@ export function createBridgeServer({
   const webSocketServer = new WebSocketServer({ noServer: true });
   const pendingCodexImageImports = [];
   const pendingProductReplacementPreviews = [];
-  const pendingProductRetouchPreviews = [];
+  const pendingProductRetouchLayers = [];
   let latestProductReplacementPreview = null;
-  let latestProductRetouchPreview = null;
   let lockedProductTarget = null;
 
   function broadcast(event) {
@@ -358,6 +357,23 @@ export function createBridgeServer({
     return targetFromToolResult(result);
   }
 
+  async function readProductSelection(mode = 'safe-auto') {
+    const tools = createPhotoshopTools({ appServer, mode: normalizeMode(mode) });
+    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'read_selection', status: 'started' }));
+    const result = await tools.readSelectionBounds();
+    if (result?.isError) {
+      broadcast(panelEvent('error', {
+        message: '没有检测到 Photoshop 选区。请先在画布里框选要返修的位置。',
+        details: result
+      }));
+      return null;
+    }
+    const target = targetFromToolResult(result);
+    broadcast(panelEvent('product_selection_state', { target }));
+    broadcast(panelEvent('assistant_delta', { text: '已读取 Photoshop 当前选区。点击“局部返修当前选区”会直接生成新返修图层。' }));
+    return target;
+  }
+
   async function generateProductReplacementPreview(body = {}) {
     const mode = normalizeMode(body.mode);
     const references = await productReferencesForPaths(body.referencePaths, body.mainReferencePath);
@@ -436,10 +452,21 @@ export function createBridgeServer({
     broadcast(panelEvent('assistant_delta', { text: `已导入替换结果 01，新图层已保留，原详情图未被覆盖。` }));
   }
 
-  async function generateProductRetouchPreview(body = {}) {
+  async function generateProductRetouchLayer(body = {}) {
     const mode = normalizeMode(body.mode);
     const references = await productReferencesForPaths(body.referencePaths, body.mainReferencePath);
     const tools = createPhotoshopTools({ appServer, mode });
+
+    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'read_selection', status: 'started' }));
+    const targetResult = await tools.readSelectionBounds();
+    if (targetResult?.isError) {
+      broadcast(panelEvent('error', {
+        message: '没有检测到 Photoshop 选区。请先在画布里框选要返修的位置。',
+        details: targetResult
+      }));
+      return;
+    }
+
     const canvasPath = join(productReferenceDir, 'retouch-exports', `detail-page-current-${Date.now()}.png`);
     await mkdir(dirname(canvasPath), { recursive: true });
     broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'export_canvas', status: 'started' }));
@@ -449,15 +476,9 @@ export function createBridgeServer({
       return;
     }
 
-    const targetResult = await tools.readRetouchTargetLayer();
-    if (targetResult?.isError) {
-      broadcast(panelEvent('error', { message: '没有找到返修区域图层，请先新建或手动画出“返修区域 01”。', details: targetResult }));
-      return;
-    }
-
     const startedAtMs = Date.now();
-    pendingProductRetouchPreviews.push({ startedAtMs, mode, canvasPath });
-    broadcast(panelEvent('tool_event', { server: 'codex', tool: 'product_retouch_preview', status: 'started' }));
+    pendingProductRetouchLayers.push({ startedAtMs, mode, canvasPath });
+    broadcast(panelEvent('tool_event', { server: 'codex', tool: 'product_retouch_layer', status: 'started' }));
     await appServer.startTurn(buildProductRetouchInput({
       canvasPath,
       target: targetFromToolResult(targetResult),
@@ -466,42 +487,37 @@ export function createBridgeServer({
     if (appServer.threadId) await store?.update?.({ threadId: appServer.threadId });
   }
 
-  async function finishProductRetouchPreview(request) {
+  async function finishProductRetouchLayer(request) {
     const image = await waitForLatestCodexImage({
       searchDir: codexImageDir,
       afterMs: request.startedAtMs,
       timeoutMs: imageWaitTimeoutMs
     });
     if (!image) {
-      broadcast(panelEvent('error', { message: 'Codex 已完成回复，但没有检测到新的局部返修预览图。可以重新生成一次。' }));
+      broadcast(panelEvent('error', { message: 'Codex 已完成回复，但没有检测到新的局部返修结果图。可以重新生成一次。' }));
       return;
     }
 
-    latestProductRetouchPreview = {
-      ...image,
-      name: imageFileLabel(image.path),
-      previewUrl: `/gallery-image?path=${encodeURIComponent(image.path)}`
-    };
-    broadcast(panelEvent('product_retouch_preview', { image: latestProductRetouchPreview }));
-  }
-
-  async function importProductRetouchPreview({ path, mode = 'safe-auto' } = {}) {
-    const filePath = path || latestProductRetouchPreview?.path;
-    if (!filePath) {
-      broadcast(panelEvent('error', { message: '还没有可导入的局部返修预览图。' }));
-      return;
-    }
-    await readCodexImageFile({ searchDir: codexImageDir, filePath });
-    const tools = createPhotoshopTools({ appServer, mode: normalizeMode(mode) });
-    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'import_product_retouch_preview', status: 'started' }));
-    const placeResult = await tools.placeImage({ filePath });
+    await readCodexImageFile({ searchDir: codexImageDir, filePath: image.path });
+    const tools = createPhotoshopTools({ appServer, mode: request.mode });
+    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'product_retouch_layer', status: 'started' }));
+    const placeResult = await tools.placeImage({ filePath: image.path });
     if (placeResult?.isError) {
-      broadcast(panelEvent('error', { message: `局部返修预览导入失败：${shortenTechnicalText(textFromToolResult(placeResult))}`, details: placeResult }));
+      broadcast(panelEvent('error', { message: `局部返修结果导入失败：${shortenTechnicalText(textFromToolResult(placeResult))}`, details: placeResult }));
       return;
     }
-    await tools.fitActiveLayerToDocument({ fillDocument: true });
-    await tools.prepareRetouchResultLayer({ layerName: '返修 01' });
-    broadcast(panelEvent('assistant_delta', { text: '已导入返修 01，新建在局部返修组里；原图和替换结果都没有被覆盖。' }));
+
+    const fitResult = await tools.fitActiveLayerToDocument({ fillDocument: true });
+    const prepareResult = await tools.prepareRetouchResultLayer({ layerName: '返修 01' });
+    if (prepareResult?.isError) {
+      broadcast(panelEvent('error', { message: `返修图层已放入画布，但整理到局部返修组失败：${shortenTechnicalText(textFromToolResult(prepareResult))}`, details: prepareResult }));
+      return;
+    }
+
+    const fitNote = fitResult?.isError
+      ? `\n提示：图层已导入，但自动适配画布失败：${shortenTechnicalText(textFromToolResult(fitResult))}`
+      : '';
+    broadcast(panelEvent('assistant_delta', { text: `已生成并导入新的局部返修图层：${imageFileLabel(image.path)}。原图和替换结果未被覆盖。${fitNote}` }));
   }
 
   async function rollbackProductRetouch(mode = 'safe-auto') {
@@ -577,10 +593,10 @@ export function createBridgeServer({
         broadcast(panelEvent('error', { message: error.message }));
       }
     }
-    if (pendingProductRetouchPreviews.length > 0) {
-      const request = pendingProductRetouchPreviews.shift();
+    if (pendingProductRetouchLayers.length > 0) {
+      const request = pendingProductRetouchLayers.shift();
       try {
-        await finishProductRetouchPreview(request);
+        await finishProductRetouchLayer(request);
       } catch (error) {
         broadcast(panelEvent('error', { message: error.message }));
       }
@@ -724,6 +740,11 @@ export function createBridgeServer({
           return;
         }
 
+        if (body.type === 'read_product_selection') {
+          await readProductSelection(body.mode);
+          return;
+        }
+
         if (body.type === 'generate_product_replacement_preview') {
           await generateProductReplacementPreview(body);
           return;
@@ -734,13 +755,8 @@ export function createBridgeServer({
           return;
         }
 
-        if (body.type === 'generate_product_retouch_preview') {
-          await generateProductRetouchPreview(body);
-          return;
-        }
-
-        if (body.type === 'import_product_retouch_preview') {
-          await importProductRetouchPreview(body);
+        if (body.type === 'generate_product_retouch_layer' || body.type === 'generate_product_retouch_preview') {
+          await generateProductRetouchLayer(body);
           return;
         }
 

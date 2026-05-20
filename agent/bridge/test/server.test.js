@@ -694,7 +694,7 @@ test('WebSocket /socket generates a product replacement preview then imports it 
   }
 });
 
-test('WebSocket /socket generates a local retouch preview then imports it as a new retouch layer', async () => {
+test('WebSocket /socket generates a local retouch layer directly from the current Photoshop selection', async () => {
   const imageDir = await mkdtemp(join(tmpdir(), 'codex-ps-generated-'));
   const referenceDir = await mkdtemp(join(tmpdir(), 'codex-ps-product-refs-'));
   const reference = await saveProductReference({
@@ -728,35 +728,32 @@ test('WebSocket /socket generates a local retouch preview then imports it as a n
   try {
     await waitForOpenSocket(socket);
 
-    socket.send(JSON.stringify({ type: 'create_retouch_target', mode: 'safe-auto' }));
-    await waitForSocketEvent(socket, event => event.type === 'assistant_delta' && /返修区域 01/.test(event.text || ''));
+    const selectionPromise = waitForSocketEvent(socket, event => event.type === 'product_selection_state');
+    socket.send(JSON.stringify({ type: 'read_product_selection', mode: 'safe-auto' }));
+    const selection = await selectionPromise;
+    assert.equal(selection.target.bounds.left, 30);
+    assert.equal(selection.target.bounds.bottom, 260);
 
     socket.send(JSON.stringify({
-      type: 'generate_product_retouch_preview',
+      type: 'generate_product_retouch_layer',
       mode: 'safe-auto',
       referencePaths: [reference.path],
       mainReferencePath: reference.path
     }));
     await waitForCondition(() => turns.length === 1);
     assert.match(turns[0][0].text, /局部返修/);
-    assert.match(turns[0][0].text, /新建返修图层/);
+    assert.match(turns[0][0].text, /Photoshop 当前选区/);
+    assert.match(turns[0][0].text, /直接导入为新建返修图层/);
+    assert.doesNotMatch(turns[0][0].text, /预览/);
 
     const threadDir = join(imageDir, 'thread');
     await mkdir(threadDir);
-    const previewPath = join(threadDir, 'retouch.png');
-    await writeFile(previewPath, 'retouch', 'utf8');
+    const retouchPath = join(threadDir, 'retouch.png');
+    await writeFile(retouchPath, 'retouch', 'utf8');
 
-    const previewPromise = waitForSocketEvent(socket, event => event.type === 'product_retouch_preview');
+    const importedPromise = waitForSocketEvent(socket, event => event.type === 'assistant_delta' && /局部返修图层/.test(event.text || ''));
     await server.handleAppServerNotification({ method: 'turn/completed', params: {} });
-    const preview = await previewPromise;
-    assert.equal(preview.image.path, previewPath);
-    assert.match(preview.image.previewUrl, /^\/gallery-image\?path=/);
-
-    socket.send(JSON.stringify({
-      type: 'import_product_retouch_preview',
-      mode: 'safe-auto',
-      path: previewPath
-    }));
+    await importedPromise;
     await waitForCondition(() => calls.some(call => /局部返修组/.test(call.args?.code || '')));
     assert.deepEqual(calls.slice(-3).map(call => call.tool), [
       'photoshop_place_image',

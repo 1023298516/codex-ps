@@ -101,19 +101,21 @@ test('panel sends product replacement commands to the bridge', async () => {
   assert.match(js, /event\.type === 'product_replacement_preview'/);
 });
 
-test('panel exposes local retouch controls that import repairs as new layers', async () => {
+test('panel exposes lightweight local retouch controls that use the current Photoshop selection', async () => {
   const html = await readFile('agent/panel/index.html', 'utf8');
   const js = await readFile('agent/panel/panel.js', 'utf8');
   assert.match(html, /局部返修/);
-  assert.match(html, /id="product-create-retouch"/);
+  assert.match(html, /id="product-read-selection"/);
   assert.match(html, /id="product-generate-retouch"/);
-  assert.match(html, /id="product-import-retouch"/);
   assert.match(html, /id="product-rollback-retouch"/);
-  assert.match(js, /type: 'create_retouch_target'/);
-  assert.match(js, /type: 'generate_product_retouch_preview'/);
-  assert.match(js, /type: 'import_product_retouch_preview'/);
+  assert.match(js, /type: 'read_product_selection'/);
+  assert.match(js, /type: 'generate_product_retouch_layer'/);
   assert.match(js, /type: 'rollback_product_retouch'/);
-  assert.match(js, /event\.type === 'product_retouch_preview'/);
+  assert.doesNotMatch(html, /id="product-import-retouch"/);
+  assert.doesNotMatch(html, /id="product-retouch-preview-image"/);
+  assert.doesNotMatch(`${html}\n${js}`, /局部返修预览/);
+  assert.doesNotMatch(js, /type: 'import_product_retouch_preview'/);
+  assert.doesNotMatch(js, /event\.type === 'product_retouch_preview'/);
 });
 
 test('panel renders product references with a selectable main product image', async () => {

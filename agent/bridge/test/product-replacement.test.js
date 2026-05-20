@@ -118,7 +118,7 @@ test('builds Codex target identification input for current Photoshop detail page
   ]);
 });
 
-test('builds Codex local retouch input that keeps edits isolated to a new layer', () => {
+test('builds Codex local retouch input for direct new-layer generation from Photoshop selection', () => {
   const input = buildProductRetouchInput({
     canvasPath: '/tmp/detail-page-current.png',
     target: { bounds: { left: 30, top: 40, right: 180, bottom: 260 } },
@@ -129,9 +129,11 @@ test('builds Codex local retouch input that keeps edits isolated to a new layer'
 
   assert.equal(input[0].type, 'text');
   assert.match(input[0].text, /局部返修/);
+  assert.match(input[0].text, /Photoshop 当前选区/);
   assert.match(input[0].text, /只处理返修区域/);
-  assert.match(input[0].text, /新建返修图层/);
+  assert.match(input[0].text, /直接导入为新建返修图层/);
   assert.match(input[0].text, /不要覆盖原详情图/);
+  assert.doesNotMatch(input[0].text, /预览/);
   assert.match(input[0].text, /30, 40, 180, 260/);
   assert.deepEqual(input.slice(1), [
     { type: 'localImage', path: '/tmp/detail-page-current.png' },

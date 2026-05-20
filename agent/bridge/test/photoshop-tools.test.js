@@ -83,6 +83,16 @@ test('safe-auto reads product target layer bounds through Photoshop MCP', async 
   assert.match(appServer.calls[0].args.code, /bounds/);
 });
 
+test('safe-auto reads current Photoshop selection bounds through Photoshop MCP', async () => {
+  const appServer = fakeAppServer();
+  const tools = createPhotoshopTools({ appServer, mode: 'safe-auto' });
+  await tools.readSelectionBounds();
+  assert.equal(appServer.calls[0].server, 'photoshop');
+  assert.equal(appServer.calls[0].tool, 'photoshop_execute_script');
+  assert.match(appServer.calls[0].args.code, /doc\.selection\.bounds/);
+  assert.match(appServer.calls[0].args.code, /没有检测到 Photoshop 选区/);
+});
+
 test('safe-auto exports the current canvas for product replacement preview generation', async () => {
   const appServer = fakeAppServer();
   const tools = createPhotoshopTools({ appServer, mode: 'safe-auto' });

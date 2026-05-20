@@ -110,6 +110,30 @@ return {
 `;
 }
 
+function readSelectionBoundsScript() {
+  return `
+if (app.documents.length === 0) {
+  throw new Error('No active document');
+}
+var doc = app.activeDocument;
+try {
+  var bounds = doc.selection.bounds;
+  return {
+    hasSelection: true,
+    source: 'Photoshop 当前选区',
+    bounds: {
+      left: bounds[0].as('px'),
+      top: bounds[1].as('px'),
+      right: bounds[2].as('px'),
+      bottom: bounds[3].as('px')
+    }
+  };
+} catch (error) {
+  throw new Error('没有检测到 Photoshop 选区。请先在画布里框选要返修的位置。');
+}
+`;
+}
+
 function prepareLayerInGroupScript({
   groupName,
   layerName
@@ -301,6 +325,13 @@ export function createPhotoshopTools({ appServer, mode = 'safe-auto', protection
         code: readTargetLayerScript({
           layerName: args.layerName || RETOUCH_TARGET_LAYER_NAME
         })
+      });
+    },
+
+    async readSelectionBounds() {
+      allowed('read_selection');
+      return appServer.callMcpTool(PHOTOSHOP_SERVER, 'photoshop_execute_script', {
+        code: readSelectionBoundsScript()
       });
     },
 
