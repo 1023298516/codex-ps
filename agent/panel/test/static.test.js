@@ -86,6 +86,8 @@ test('panel exposes product replacement controls with Chinese copy', async () =>
   assert.match(html, /accept="image\/\*"/);
   assert.match(html, /主产品图/);
   assert.match(html, /id="product-generate-preview"/);
+  assert.match(html, /一键替换/);
+  assert.doesNotMatch(html, /生成局部融合预览/);
   assert.match(html, /id="product-import-preview"/);
 });
 
