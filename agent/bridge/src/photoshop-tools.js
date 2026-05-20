@@ -123,33 +123,57 @@ if (app.documents.length === 0) {
 var doc = app.activeDocument;
 var targetName = ${quoted(layerName)};
 
-function findLayerByName(parent, name) {
-  for (var i = 0; i < parent.layers.length; i++) {
-    var layer = parent.layers[i];
-    if (layer.name === name) return layer;
-    if (layer.typename === 'LayerSet') {
-      var found = findLayerByName(layer, name);
-      if (found) return found;
-    }
-  }
-  return null;
+function targetLayerSort(a, b) {
+  return a.name.localeCompare(b.name);
 }
 
-var target = findLayerByName(doc, targetName);
-if (!target) {
+function isTargetLayerName(name) {
+  return name === targetName || /^目标\\s*\\d+$/i.test(name);
+}
+
+function collectTargetLayers(parent, results) {
+  for (var i = 0; i < parent.layers.length; i++) {
+    var layer = parent.layers[i];
+    if (isTargetLayerName(layer.name)) results.push(layer);
+    if (layer.typename === 'LayerSet') {
+      collectTargetLayers(layer, results);
+    }
+  }
+}
+
+var targets = [];
+collectTargetLayers(doc, targets);
+targets.sort(targetLayerSort);
+
+if (targets.length === 0) {
   throw new Error('没有找到目标图层：' + targetName);
 }
 
-var bounds = target.bounds;
-return {
-  found: true,
-  layerName: target.name,
-  bounds: {
+function boundsForLayer(layer) {
+  var bounds = layer.bounds;
+  return {
     left: bounds[0].as('px'),
     top: bounds[1].as('px'),
     right: bounds[2].as('px'),
     bottom: bounds[3].as('px')
-  }
+  };
+}
+
+var firstTarget = targets[0];
+var firstBounds = boundsForLayer(firstTarget);
+var targetPayload = [];
+for (var j = 0; j < targets.length; j++) {
+  targetPayload.push({
+    layerName: targets[j].name,
+    bounds: boundsForLayer(targets[j])
+  });
+}
+
+return {
+  found: true,
+  layerName: firstTarget.name,
+  bounds: firstBounds,
+  targets: targetPayload
 };
 `;
 }

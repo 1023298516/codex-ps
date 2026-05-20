@@ -146,7 +146,23 @@ export async function deleteProductReference({
 }
 
 function targetText(target) {
-  const bounds = target?.bounds;
+  const targets = Array.isArray(target?.targets)
+    ? target.targets.filter(item => item?.bounds)
+    : [];
+  if (targets.length > 1) {
+    const lines = targets.map((item, index) => {
+      const bounds = item.bounds;
+      const name = item.layerName || item.name || `目标 ${String(index + 1).padStart(2, '0')}`;
+      return `${name}：${bounds.left}, ${bounds.top}, ${bounds.right}, ${bounds.bottom}`;
+    });
+    return [
+      `当前读取到共 ${targets.length} 个目标图层。`,
+      ...lines,
+      '必须替换所有目标，不能只替换第一个目标；每个目标都要按原图里的方位、角度、透视和遮挡关系分别融合。'
+    ].join('\n');
+  }
+
+  const bounds = targets[0]?.bounds || target?.bounds;
   if (!bounds) return '当前未读取到目标边界，请优先使用 Photoshop 里的“目标 01”圈出图层作为替换区域。';
   return `目标区域边界为：${bounds.left}, ${bounds.top}, ${bounds.right}, ${bounds.bottom}。`;
 }
@@ -220,6 +236,7 @@ function replacementModeText(replacementMode) {
     return [
       '替换模式：多方位替换。请以 Photoshop 里已经圈出的目标图层为准，逐个替换圈出的目标。',
       '如果画布里存在多个圈出的目标，请分别匹配每个目标在原详情图里的方位、角度、透视、尺寸、遮挡关系和场景位置。正面替换正面，侧面替换侧面，俯视替换俯视，手持或摆放关系保持原构图。',
+      '必须替换所有目标；不要只替换第一个、最大或最显眼的目标。',
       '不要根据手动数量猜目标；未圈出的产品位置先保持原样。'
     ].join('\n');
   }

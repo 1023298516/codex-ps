@@ -136,7 +136,13 @@ test('builds Codex image-generation input with anti-hallucination and style-fusi
 test('builds Codex product replacement input for multi-orientation circled targets', () => {
   const input = buildProductReplacementInput({
     canvasPath: '/tmp/detail-page.png',
-    target: { bounds: { left: 10, top: 20, right: 210, bottom: 420 } },
+    target: {
+      bounds: { left: 10, top: 20, right: 210, bottom: 420 },
+      targets: [
+        { layerName: '目标 01', bounds: { left: 10, top: 20, right: 210, bottom: 420 } },
+        { layerName: '目标 02', bounds: { left: 260, top: 30, right: 520, bottom: 430 } }
+      ]
+    },
     replacementMode: 'multi',
     references: [
       { path: '/tmp/front.png', name: 'front.png', role: 'main' },
@@ -149,6 +155,10 @@ test('builds Codex product replacement input for multi-orientation circled targe
   assert.match(input[0].text, /多方位替换/);
   assert.match(input[0].text, /圈出的目标/);
   assert.match(input[0].text, /目标图层/);
+  assert.match(input[0].text, /共 2 个目标/);
+  assert.match(input[0].text, /目标 01：10, 20, 210, 420/);
+  assert.match(input[0].text, /目标 02：260, 30, 520, 430/);
+  assert.match(input[0].text, /必须替换所有目标/);
   assert.match(input[0].text, /逐个替换/);
   assert.match(input[0].text, /方位、角度、透视/);
   assert.match(input[0].text, /正面[\s\S]*侧面[\s\S]*俯视/);

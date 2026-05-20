@@ -72,6 +72,37 @@ function toolResultMentions(result, pattern) {
 
 function targetFromToolResult(result) {
   const text = textFromToolResult(result);
+  const targets = [];
+  const targetPattern = /"?(?:layerName|name)"?\s*[:=]\s*["']?([^"',}\]]+)["']?[\s\S]*?"?bounds"?\s*[:=]\s*\{[\s\S]*?"?left"?\s*[:=]\s*([-\d.]+)[\s\S]*?"?top"?\s*[:=]\s*([-\d.]+)[\s\S]*?"?right"?\s*[:=]\s*([-\d.]+)[\s\S]*?"?bottom"?\s*[:=]\s*([-\d.]+)[\s\S]*?\}/gi;
+  for (const match of text.matchAll(targetPattern)) {
+    targets.push({
+      layerName: match[1].trim(),
+      bounds: {
+        left: Number(match[2]),
+        top: Number(match[3]),
+        right: Number(match[4]),
+        bottom: Number(match[5])
+      }
+    });
+  }
+
+  const uniqueTargets = [];
+  const seenBounds = new Set();
+  for (const target of targets) {
+    const key = `${target.bounds.left},${target.bounds.top},${target.bounds.right},${target.bounds.bottom}`;
+    if (seenBounds.has(key)) continue;
+    seenBounds.add(key);
+    uniqueTargets.push(target);
+  }
+
+  if (uniqueTargets.length > 0) {
+    return {
+      text,
+      bounds: uniqueTargets[0].bounds,
+      targets: uniqueTargets
+    };
+  }
+
   const match = text.match(/"?left"?\s*[:=]\s*([-\d.]+)[\s\S]*?"?top"?\s*[:=]\s*([-\d.]+)[\s\S]*?"?right"?\s*[:=]\s*([-\d.]+)[\s\S]*?"?bottom"?\s*[:=]\s*([-\d.]+)/i);
   if (!match) return { text };
   return {
@@ -81,7 +112,16 @@ function targetFromToolResult(result) {
       top: Number(match[2]),
       right: Number(match[3]),
       bottom: Number(match[4])
-    }
+    },
+    targets: [{
+      layerName: '目标 01',
+      bounds: {
+        left: Number(match[1]),
+        top: Number(match[2]),
+        right: Number(match[3]),
+        bottom: Number(match[4])
+      }
+    }]
   };
 }
 

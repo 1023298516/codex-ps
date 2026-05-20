@@ -723,6 +723,14 @@ test('WebSocket /socket generates a product replacement preview then imports it 
         if (tool === 'photoshop_export_canvas_png') {
           await writeFile(args.outputPath, 'canvas', 'utf8');
         }
+        if (tool === 'photoshop_execute_script' && /目标 01/.test(args.code || '')) {
+          return {
+            content: [{
+              type: 'text',
+              text: 'targets:[{layerName:"目标 01",bounds:{left:10,top:20,right:210,bottom:420}},{layerName:"目标 02",bounds:{left:260,top:30,right:520,bottom:430}}]'
+            }]
+          };
+        }
         return { content: [{ type: 'text', text: `${tool}: ok` }] };
       }
     },
@@ -746,6 +754,10 @@ test('WebSocket /socket generates a product replacement preview then imports it 
     assert.match(turns[0][0].text, /双向结合/);
     assert.match(turns[0][0].text, /多方位替换/);
     assert.match(turns[0][0].text, /圈出的目标/);
+    assert.match(turns[0][0].text, /共 2 个目标/);
+    assert.match(turns[0][0].text, /目标 01：10, 20, 210, 420/);
+    assert.match(turns[0][0].text, /目标 02：260, 30, 520, 430/);
+    assert.match(turns[0][0].text, /必须替换所有目标/);
     assert.doesNotMatch(turns[0][0].text, /目标数量/);
     assert.match(turns[0][0].text, /主产品图：front\.png/);
     assert.equal(turns[0].filter(item => item.type === 'localImage').length, 2);
