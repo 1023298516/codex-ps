@@ -656,14 +656,14 @@ test('WebSocket /socket generates a product replacement preview then imports it 
       type: 'generate_product_replacement_preview',
       mode: 'safe-auto',
       replacementMode: 'multi',
-      targetCount: 3,
       referencePaths: [reference.path],
       mainReferencePath: reference.path
     }));
     await waitForCondition(() => turns.length === 1);
     assert.match(turns[0][0].text, /双向结合/);
     assert.match(turns[0][0].text, /多方位替换/);
-    assert.match(turns[0][0].text, /目标数量：3/);
+    assert.match(turns[0][0].text, /圈出的目标/);
+    assert.doesNotMatch(turns[0][0].text, /目标数量/);
     assert.match(turns[0][0].text, /主产品图：front\.png/);
     assert.equal(turns[0].filter(item => item.type === 'localImage').length, 2);
 

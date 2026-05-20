@@ -410,8 +410,7 @@ export function createBridgeServer({
       canvasPath,
       target,
       references,
-      replacementMode: body.replacementMode,
-      targetCount: body.targetCount
+      replacementMode: body.replacementMode
     }));
     if (appServer.threadId) await store?.update?.({ threadId: appServer.threadId });
   }
