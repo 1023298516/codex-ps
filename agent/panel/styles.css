@@ -364,7 +364,7 @@ textarea::placeholder {
 }
 
 .product-dialog {
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .gallery-header,
@@ -619,57 +619,100 @@ textarea::placeholder {
   font-size: 11px;
 }
 
-.product-actions {
-  padding: 12px;
-  border-bottom: 1px solid var(--border);
+.product-header-compact {
+  padding: 10px 12px;
+}
+
+.product-header-compact strong {
+  font-size: 17px;
+  line-height: 21px;
+}
+
+.product-header-compact .button {
+  min-height: 28px;
+  padding: 0 10px;
+}
+
+.product-workflow {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 8px;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.product-step {
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
   background: var(--surface);
-  flex-wrap: wrap;
+  overflow: hidden;
 }
 
-.product-actions .button {
-  flex: 1 1 96px;
+.product-step:last-child {
+  margin-bottom: 0;
 }
 
-.product-module {
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.product-module .product-actions {
-  border-bottom: 0;
-}
-
-.product-module-title {
-  padding: 10px 12px 0;
+.product-step-head {
+  min-height: 42px;
+  padding: 8px 10px;
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: center;
+  gap: 9px;
+}
+
+.product-step-head strong {
+  display: block;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 17px;
+}
+
+.product-step-head span:not(.product-step-index) {
+  display: block;
+  margin-top: 1px;
+  color: var(--text-3);
+  font-size: 10px;
+  line-height: 13px;
+}
+
+.product-step-index {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.product-action-row,
+.product-retouch-actions {
+  padding: 0 10px 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
-.product-module-title-inline {
-  border-bottom: 0;
-  background: var(--panel);
+.product-action-row .button,
+.product-retouch-actions .button {
+  width: 100%;
 }
 
-.product-module-title strong {
-  color: var(--text);
-  font-size: 14px;
-  line-height: 18px;
-}
-
-.product-module-title span {
-  color: var(--text-3);
-  font-size: 11px;
+.product-upload-row {
+  grid-template-columns: 1fr;
 }
 
 .product-replacement-controls {
-  padding: 10px 12px 12px;
+  padding: 0 10px 10px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
-  border-bottom: 1px solid var(--border);
-  background: var(--panel);
+  background: transparent;
 }
 
 .product-mode-switch {
@@ -728,12 +771,18 @@ textarea::placeholder {
 }
 
 .product-rule-row {
-  min-height: 42px;
-  padding: 8px 12px;
+  min-height: 38px;
+  padding: 7px 12px;
   display: flex;
   gap: 8px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
+}
+
+.product-rule-row-compact span {
+  min-height: 24px;
+  border-radius: 12px;
+  font-size: 10px;
 }
 
 .product-rule-row span:nth-child(1) {
@@ -749,9 +798,9 @@ textarea::placeholder {
 }
 
 .product-empty {
-  margin: 12px;
-  min-height: 88px;
-  padding: 14px;
+  margin: 0 10px 10px;
+  min-height: 58px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -772,18 +821,22 @@ textarea::placeholder {
 }
 
 .product-reference-grid {
-  min-height: 96px;
-  max-height: 174px;
-  padding: 12px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-height: 94px;
+  max-height: 108px;
+  margin: 0 10px 10px;
+  padding: 8px;
+  display: flex;
   gap: 8px;
-  overflow-y: auto;
-  background: var(--bg);
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input);
 }
 
 .product-reference-card {
-  min-width: 0;
+  width: 78px;
+  min-width: 78px;
   padding: 6px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -798,7 +851,7 @@ textarea::placeholder {
 .product-reference-card img {
   display: block;
   width: 100%;
-  aspect-ratio: 1 / 1;
+  height: 48px;
   object-fit: cover;
   border: 1px solid var(--border-strong);
   border-radius: 4px;
@@ -818,7 +871,7 @@ textarea::placeholder {
 
 .product-main-button {
   width: 100%;
-  min-height: 24px;
+  min-height: 22px;
   margin-top: 6px;
   border: 1px solid var(--border-strong);
   border-radius: 6px;
@@ -834,43 +887,9 @@ textarea::placeholder {
   color: #ffffff;
 }
 
-.product-preview,
-.product-retouch {
-  border-top: 1px solid var(--border);
-  background: var(--panel);
-}
-
-.product-retouch {
-  background: var(--surface);
-}
-
-.product-retouch-actions {
-  padding: 10px 12px 12px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.product-retouch-actions .button {
-  flex: 1 1 98px;
-}
-
-.product-preview-header {
-  padding: 10px 12px 0;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.product-preview-header strong {
-  font-size: 14px;
-  line-height: 18px;
-}
-
 .product-preview-frame {
-  margin: 10px 12px 12px;
-  aspect-ratio: 4 / 3;
+  height: clamp(132px, 25vh, 188px);
+  margin: 0 10px 10px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: #111111;
@@ -882,6 +901,16 @@ textarea::placeholder {
   height: 100%;
   display: block;
   object-fit: contain;
+}
+
+.product-footer-sticky {
+  flex: 0 0 auto;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: 10px 12px;
+  background: var(--panel);
+  box-shadow: 0 -1px 0 var(--border);
 }
 
 @media (max-width: 350px) {

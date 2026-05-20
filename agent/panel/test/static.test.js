@@ -155,6 +155,24 @@ test('panel styles product replacement UI as a compact Photoshop tool surface', 
   assert.doesNotMatch(css, /border-radius:\s*(2[0-9]|[3-9][0-9])px/);
 });
 
+test('panel lays out product replacement as a compact step workflow', async () => {
+  const html = await readFile('agent/panel/index.html', 'utf8');
+  const css = await readFile('agent/panel/styles.css', 'utf8');
+  assert.match(html, /class="product-workflow"/);
+  assert.match(html, /class="product-step product-step-target"/);
+  assert.match(html, /class="product-step product-step-replace"/);
+  assert.match(html, /class="product-step product-step-preview"/);
+  assert.match(html, /class="product-step product-step-retouch"/);
+  assert.match(html, /class="product-step-index">1</);
+  assert.match(html, /class="product-step-index">4</);
+  assert.match(html, /class="product-footer product-footer-sticky"/);
+  assert.match(css, /\.product-workflow/);
+  assert.match(css, /\.product-step-head/);
+  assert.match(css, /\.product-footer-sticky/);
+  assert.match(css, /\.product-reference-grid\s*{[\s\S]*display:\s*flex/);
+  assert.match(css, /\.product-preview-frame\s*{[\s\S]*height:\s*clamp\(/);
+});
+
 test('panel compacts verbose technical output before rendering logs', async () => {
   const js = await readFile('agent/panel/panel.js', 'utf8');
   assert.match(js, /compactDisplayText/);
