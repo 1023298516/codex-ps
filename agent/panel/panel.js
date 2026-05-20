@@ -242,6 +242,15 @@ function requestProductReferences() {
   }
 }
 
+function deleteProductReference(path) {
+  if (!path) return;
+  try {
+    sendCommand({ type: 'delete_product_reference', path });
+  } catch (error) {
+    addEvent({ type: 'error', message: error.message });
+  }
+}
+
 function updateGallerySelection() {
   const count = selectedImagePaths.size;
   if (gallerySelectedCount) gallerySelectedCount.textContent = `已选择 ${count} 张`;
@@ -390,6 +399,19 @@ function renderProductReferences(references) {
     const card = document.createElement('div');
     card.className = 'product-reference-card';
     card.classList.toggle('main-reference', reference.path === mainProductReferencePath);
+
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'product-delete-button';
+    deleteButton.textContent = '×';
+    deleteButton.title = '删除参考图';
+    deleteButton.setAttribute('aria-label', `删除参考图：${reference.name || '产品参考图'}`);
+    deleteButton.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      deleteProductReference(reference.path);
+    });
+    card.appendChild(deleteButton);
 
     const image = document.createElement('img');
     image.src = productReferenceUrl(reference);

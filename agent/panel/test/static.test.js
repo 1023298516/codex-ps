@@ -101,6 +101,7 @@ test('panel sends product replacement commands to the bridge', async () => {
   const js = await readFile('agent/panel/panel.js', 'utf8');
   assert.match(js, /type: 'upload_product_reference'/);
   assert.match(js, /type: 'list_product_references'/);
+  assert.match(js, /type: 'delete_product_reference'/);
   assert.match(js, /type: 'identify_product_target'/);
   assert.match(js, /type: 'lock_product_target'/);
   assert.doesNotMatch(js, /type: 'create_product_target'/);
@@ -138,10 +139,14 @@ test('panel exposes a single lightweight local retouch action for the current Ph
 
 test('panel renders product references with a selectable main product image', async () => {
   const js = await readFile('agent/panel/panel.js', 'utf8');
+  const css = await readFile('agent/panel/styles.css', 'utf8');
   assert.match(js, /mainProductReferencePath/);
   assert.match(js, /setMainProductReference/);
+  assert.match(js, /deleteProductReference/);
   assert.match(js, /设为主图/);
   assert.match(js, /主图/);
+  assert.match(js, /删除参考图/);
+  assert.match(css, /\.product-delete-button/);
 });
 
 test('panel styles product replacement UI as a compact Photoshop tool surface', async () => {

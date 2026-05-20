@@ -7,6 +7,7 @@ import {
   buildProductIdentificationInput,
   buildProductReplacementInput,
   buildProductRetouchInput,
+  deleteProductReference,
   listProductReferences,
   readProductReferenceFile,
   saveProductReference
@@ -71,6 +72,31 @@ test('lists product references newest first and serves only files inside the ref
     assert.equal(served.buffer.toString('utf8'), 'side');
 
     await assert.rejects(() => readProductReferenceFile({
+      referenceDir,
+      filePath: join(referenceDir, '..', 'outside.png')
+    }), /参考图目录之外/);
+  } finally {
+    await rm(referenceDir, { recursive: true, force: true });
+  }
+});
+
+test('deletes one uploaded product reference inside the reference directory', async () => {
+  const referenceDir = await mkdtemp(join(tmpdir(), 'codex-ps-product-refs-'));
+  try {
+    const saved = await saveProductReference({
+      referenceDir,
+      name: 'front.png',
+      mimeType: 'image/png',
+      data: Buffer.from('front').toString('base64')
+    });
+
+    const result = await deleteProductReference({ referenceDir, filePath: saved.path });
+
+    assert.equal(result.deleted, true);
+    assert.equal(result.path, saved.path);
+    assert.equal((await listProductReferences({ referenceDir })).length, 0);
+    await assert.rejects(() => readFile(saved.path, 'utf8'));
+    await assert.rejects(() => deleteProductReference({
       referenceDir,
       filePath: join(referenceDir, '..', 'outside.png')
     }), /参考图目录之外/);

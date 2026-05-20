@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, extname, join, relative, resolve, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
@@ -129,6 +129,19 @@ export async function readProductReferenceFile({
   return {
     contentType,
     buffer: await readFile(safePath)
+  };
+}
+
+export async function deleteProductReference({
+  referenceDir = DEFAULT_PRODUCT_REFERENCE_DIR,
+  filePath
+} = {}) {
+  const safePath = assertInsideReferenceDir(referenceDir, filePath);
+  if (!contentTypeForPath(safePath)) throw new Error('不支持的参考图格式。');
+  await rm(safePath);
+  return {
+    deleted: true,
+    path: safePath
   };
 }
 

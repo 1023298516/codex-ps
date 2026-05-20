@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import WebSocket from 'ws';
 import { once } from 'node:events';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createBridgeServer } from '../src/server.js';
@@ -524,6 +524,15 @@ test('WebSocket /socket uploads and lists product replacement reference images',
     const listed = await listPromise;
     assert.equal(listed.references.length, 1);
     assert.equal(listed.references[0].path, uploaded.references[0].path);
+
+    const deletePromise = waitForSocketEvent(socket, event => event.type === 'product_references');
+    socket.send(JSON.stringify({
+      type: 'delete_product_reference',
+      path: uploaded.references[0].path
+    }));
+    const afterDelete = await deletePromise;
+    assert.equal(afterDelete.references.length, 0);
+    await assert.rejects(() => readFile(uploaded.references[0].path, 'utf8'));
   } finally {
     socket.close();
     await server.close();

@@ -11,6 +11,7 @@ import {
   buildProductIdentificationInput,
   buildProductReplacementInput,
   buildProductRetouchInput,
+  deleteProductReference,
   listProductReferences,
   readProductReferenceFile,
   saveProductReference
@@ -707,6 +708,15 @@ export function createBridgeServer({
         }
 
         if (body.type === 'list_product_references') {
+          sendSocket(socket, panelEvent('product_references', { references: await listProductReferenceImages() }));
+          return;
+        }
+
+        if (body.type === 'delete_product_reference') {
+          await deleteProductReference({
+            referenceDir: productReferenceDir,
+            filePath: body.path
+          });
           sendSocket(socket, panelEvent('product_references', { references: await listProductReferenceImages() }));
           return;
         }

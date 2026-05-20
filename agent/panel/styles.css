@@ -804,12 +804,36 @@ textarea::placeholder {
 }
 
 .product-reference-card {
+  position: relative;
   width: 78px;
   min-width: 78px;
   padding: 6px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface-2);
+}
+
+.product-delete-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 50%;
+  background: rgba(18, 18, 18, 0.82);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 18px;
+}
+
+.product-delete-button:hover {
+  border-color: rgba(255, 255, 255, 0.42);
+  background: rgba(210, 55, 60, 0.9);
 }
 
 .product-reference-card.main-reference {
