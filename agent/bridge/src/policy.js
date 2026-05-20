@@ -16,6 +16,7 @@ const SAFE_AUTO_ALLOWED = new Set([
   'create_retouch_target_layer',
   'read_retouch_target_layer',
   'prepare_retouch_result_layer',
+  'hide_latest_retouch_layer',
   'rename_new_layer',
   'transform_new_or_selected_layer',
   'selection_to_new_layer_result'

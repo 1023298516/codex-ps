@@ -71,11 +71,16 @@ test('panel exposes product replacement controls with Chinese copy', async () =>
   assert.match(html, /id="product-replace-open"/);
   assert.match(html, /id="product-modal"/);
   assert.match(html, /产品替换/);
+  assert.match(html, /目标识别/);
+  assert.match(html, /id="product-identify-target"/);
   assert.match(html, /id="product-create-target"/);
   assert.match(html, /id="product-read-target"/);
+  assert.match(html, /id="product-lock-target"/);
+  assert.match(html, /id="product-target-status"/);
   assert.match(html, /id="product-reference-input"/);
   assert.match(html, /multiple/);
   assert.match(html, /accept="image\/\*"/);
+  assert.match(html, /主产品图/);
   assert.match(html, /id="product-generate-preview"/);
   assert.match(html, /id="product-import-preview"/);
 });
@@ -84,11 +89,15 @@ test('panel sends product replacement commands to the bridge', async () => {
   const js = await readFile('agent/panel/panel.js', 'utf8');
   assert.match(js, /type: 'upload_product_reference'/);
   assert.match(js, /type: 'list_product_references'/);
+  assert.match(js, /type: 'identify_product_target'/);
   assert.match(js, /type: 'create_product_target'/);
   assert.match(js, /type: 'read_product_target'/);
+  assert.match(js, /type: 'lock_product_target'/);
   assert.match(js, /type: 'generate_product_replacement_preview'/);
+  assert.match(js, /mainReferencePath/);
   assert.match(js, /type: 'import_product_replacement_preview'/);
   assert.match(js, /event\.type === 'product_references'/);
+  assert.match(js, /event\.type === 'product_target_state'/);
   assert.match(js, /event\.type === 'product_replacement_preview'/);
 });
 
@@ -99,10 +108,20 @@ test('panel exposes local retouch controls that import repairs as new layers', a
   assert.match(html, /id="product-create-retouch"/);
   assert.match(html, /id="product-generate-retouch"/);
   assert.match(html, /id="product-import-retouch"/);
+  assert.match(html, /id="product-rollback-retouch"/);
   assert.match(js, /type: 'create_retouch_target'/);
   assert.match(js, /type: 'generate_product_retouch_preview'/);
   assert.match(js, /type: 'import_product_retouch_preview'/);
+  assert.match(js, /type: 'rollback_product_retouch'/);
   assert.match(js, /event\.type === 'product_retouch_preview'/);
+});
+
+test('panel renders product references with a selectable main product image', async () => {
+  const js = await readFile('agent/panel/panel.js', 'utf8');
+  assert.match(js, /mainProductReferencePath/);
+  assert.match(js, /setMainProductReference/);
+  assert.match(js, /设为主图/);
+  assert.match(js, /主图/);
 });
 
 test('panel styles product replacement UI as a compact Photoshop tool surface', async () => {

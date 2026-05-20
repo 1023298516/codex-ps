@@ -31,6 +31,9 @@ const TOOL_LABELS = {
   product_replacement_preview: {
     started: '正在生成产品融合预览...'
   },
+  product_target_identification: {
+    started: '正在识别当前产品...'
+  },
   import_product_replacement_preview: {
     started: '正在导入替换结果...'
   },
@@ -45,6 +48,9 @@ const TOOL_LABELS = {
   },
   import_product_retouch_preview: {
     started: '正在导入返修图层...'
+  },
+  hide_latest_retouch_layer: {
+    started: '正在回退局部返修...'
   }
 };
 
@@ -75,6 +81,7 @@ let productReferenceInput = null;
 let productReferenceGrid = null;
 let productReferenceEmpty = null;
 let productReferenceCount = null;
+let productTargetStatus = null;
 let productPreviewImage = null;
 let productPreviewStatus = null;
 let productImportPreview = null;
@@ -82,6 +89,7 @@ let productRetouchPreviewImage = null;
 let productRetouchPreviewStatus = null;
 let productImportRetouch = null;
 let productReferences = [];
+let mainProductReferencePath = null;
 let productPreviewPath = null;
 let productRetouchPreviewPath = null;
 
@@ -376,6 +384,9 @@ function closeGallery() {
 
 function renderProductReferences(references) {
   productReferences = references || [];
+  if (!mainProductReferencePath || !productReferences.some(reference => reference.path === mainProductReferencePath)) {
+    mainProductReferencePath = productReferences[0]?.path || null;
+  }
   if (productReferenceCount) productReferenceCount.textContent = `已上传 ${productReferences.length} 张参考图`;
   if (!productReferenceGrid || !productReferenceEmpty) return;
 
@@ -386,6 +397,7 @@ function renderProductReferences(references) {
   for (const reference of productReferences) {
     const card = document.createElement('div');
     card.className = 'product-reference-card';
+    card.classList.toggle('main-reference', reference.path === mainProductReferencePath);
 
     const image = document.createElement('img');
     image.src = productReferenceUrl(reference);
@@ -396,8 +408,20 @@ function renderProductReferences(references) {
     name.textContent = reference.name || '产品参考图';
     card.appendChild(name);
 
+    const mainButton = document.createElement('button');
+    mainButton.type = 'button';
+    mainButton.className = 'product-main-button';
+    mainButton.textContent = reference.path === mainProductReferencePath ? '主图' : '设为主图';
+    mainButton.addEventListener('click', () => setMainProductReference(reference.path));
+    card.appendChild(mainButton);
+
     productReferenceGrid.appendChild(card);
   }
+}
+
+function setMainProductReference(path) {
+  mainProductReferencePath = path;
+  renderProductReferences(productReferences);
 }
 
 function openProductReplacement() {
@@ -478,6 +502,28 @@ function readProductTarget() {
   }
 }
 
+function identifyProductTarget() {
+  try {
+    sendCommand({ type: 'identify_product_target', mode });
+  } catch (error) {
+    addEvent({ type: 'error', message: error.message });
+  }
+}
+
+function lockProductTarget() {
+  try {
+    sendCommand({ type: 'lock_product_target', mode });
+  } catch (error) {
+    addEvent({ type: 'error', message: error.message });
+  }
+}
+
+function updateProductTargetState(event = {}) {
+  if (!productTargetStatus) return;
+  productTargetStatus.textContent = event.locked ? '目标已锁定' : '目标已读取，待锁定';
+  productTargetStatus.classList.toggle('is-locked', event.locked === true);
+}
+
 function createRetouchTarget() {
   try {
     sendCommand({ type: 'create_retouch_target', mode });
@@ -496,7 +542,8 @@ function generateProductPreview() {
     sendCommand({
       type: 'generate_product_replacement_preview',
       mode,
-      referencePaths: productReferences.map(reference => reference.path)
+      referencePaths: productReferences.map(reference => reference.path),
+      mainReferencePath: mainProductReferencePath
     });
   } catch (error) {
     addEvent({ type: 'error', message: error.message });
@@ -525,7 +572,8 @@ function generateProductRetouchPreview() {
     sendCommand({
       type: 'generate_product_retouch_preview',
       mode,
-      referencePaths: productReferences.map(reference => reference.path)
+      referencePaths: productReferences.map(reference => reference.path),
+      mainReferencePath: mainProductReferencePath
     });
   } catch (error) {
     addEvent({ type: 'error', message: error.message });
@@ -543,6 +591,14 @@ function importProductRetouchPreview() {
       mode,
       path: productRetouchPreviewPath
     });
+  } catch (error) {
+    addEvent({ type: 'error', message: error.message });
+  }
+}
+
+function rollbackProductRetouch() {
+  try {
+    sendCommand({ type: 'rollback_product_retouch', mode });
   } catch (error) {
     addEvent({ type: 'error', message: error.message });
   }
@@ -594,6 +650,10 @@ function connectBridge() {
         addEvent({ type: 'assistant_delta', text: '融合预览已生成，确认后可导入画布。' });
         return;
       }
+      if (event.type === 'product_target_state') {
+        updateProductTargetState(event);
+        return;
+      }
       if (event.type === 'product_retouch_preview') {
         setProductRetouchPreview(event.image);
         addEvent({ type: 'assistant_delta', text: '局部返修预览已生成，确认后会导入为新返修图层。' });
@@ -635,6 +695,7 @@ function init() {
   productReferenceGrid = document.querySelector('#product-reference-grid');
   productReferenceEmpty = document.querySelector('#product-reference-empty');
   productReferenceCount = document.querySelector('#product-reference-count');
+  productTargetStatus = document.querySelector('#product-target-status');
   productPreviewImage = document.querySelector('#product-preview-image');
   productPreviewStatus = document.querySelector('#product-preview-status');
   productImportPreview = document.querySelector('#product-import-preview');
@@ -673,9 +734,13 @@ function init() {
 
   document.querySelector('#product-close').addEventListener('click', closeProductReplacement);
 
+  document.querySelector('#product-identify-target').addEventListener('click', identifyProductTarget);
+
   document.querySelector('#product-create-target').addEventListener('click', createProductTarget);
 
   document.querySelector('#product-read-target').addEventListener('click', readProductTarget);
+
+  document.querySelector('#product-lock-target').addEventListener('click', lockProductTarget);
 
   document.querySelector('#product-upload-trigger').addEventListener('click', () => productReferenceInput.click());
 
@@ -693,6 +758,8 @@ function init() {
   document.querySelector('#product-generate-retouch').addEventListener('click', generateProductRetouchPreview);
 
   productImportRetouch.addEventListener('click', importProductRetouchPreview);
+
+  document.querySelector('#product-rollback-retouch').addEventListener('click', rollbackProductRetouch);
 
   document.querySelector('#gallery-close').addEventListener('click', closeGallery);
 

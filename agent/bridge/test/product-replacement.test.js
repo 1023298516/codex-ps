@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
+  buildProductIdentificationInput,
   buildProductReplacementInput,
   buildProductRetouchInput,
   listProductReferences,
@@ -83,7 +84,7 @@ test('builds Codex image-generation input with anti-hallucination and style-fusi
     canvasPath: '/tmp/detail-page.png',
     target: { bounds: { left: 10, top: 20, right: 210, bottom: 420 } },
     references: [
-      { path: '/tmp/front.png', name: 'front.png' },
+      { path: '/tmp/front.png', name: 'front.png', role: 'main' },
       { path: '/tmp/side.png', name: 'side.png' }
     ]
   });
@@ -92,12 +93,28 @@ test('builds Codex image-generation input with anti-hallucination and style-fusi
   assert.match(input[0].text, /双向结合/);
   assert.match(input[0].text, /产品保真/);
   assert.match(input[0].text, /画面融合/);
+  assert.match(input[0].text, /主产品图：front\.png/);
+  assert.match(input[0].text, /多方位参考图/);
   assert.match(input[0].text, /不要改形、改色、改材质、改 LOGO/);
   assert.match(input[0].text, /10, 20, 210, 420/);
   assert.deepEqual(input.slice(1), [
     { type: 'localImage', path: '/tmp/detail-page.png' },
     { type: 'localImage', path: '/tmp/front.png' },
     { type: 'localImage', path: '/tmp/side.png' }
+  ]);
+});
+
+test('builds Codex target identification input for current Photoshop detail page', () => {
+  const input = buildProductIdentificationInput({
+    canvasPath: '/tmp/detail-page.png'
+  });
+
+  assert.equal(input[0].type, 'text');
+  assert.match(input[0].text, /识别当前 Photoshop 详情页里的产品/);
+  assert.match(input[0].text, /候选目标/);
+  assert.match(input[0].text, /人工确认/);
+  assert.deepEqual(input.slice(1), [
+    { type: 'localImage', path: '/tmp/detail-page.png' }
   ]);
 });
 

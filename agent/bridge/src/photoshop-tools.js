@@ -136,13 +136,36 @@ if (!group) {
   group.name = groupName;
 }
 
-layer.name = layerName;
+function layerExists(parent, name) {
+  for (var i = 0; i < parent.layers.length; i++) {
+    if (parent.layers[i].name === name) return true;
+  }
+  return false;
+}
+
+function nextVersionName(parent, requestedName) {
+  var match = String(requestedName).match(/^(.*?)(?:\\s+(\\d+))?$/);
+  var prefix = match && match[1] ? match[1] : requestedName;
+  var width = match && match[2] ? match[2].length : 2;
+  var index = match && match[2] ? Number(match[2]) : 1;
+  var candidate = requestedName;
+  while (layerExists(parent, candidate)) {
+    index += 1;
+    var number = String(index);
+    while (number.length < width) number = '0' + number;
+    candidate = prefix + ' ' + number;
+  }
+  return candidate;
+}
+
+var finalLayerName = nextVersionName(group, layerName);
+layer.name = finalLayerName;
 layer.move(group, ElementPlacement.INSIDE);
 
 return {
   prepared: true,
   groupName: groupName,
-  layerName: layerName
+  layerName: finalLayerName
 };
 `;
 }
@@ -159,6 +182,44 @@ function prepareRetouchResultLayerScript({
   layerName = RETOUCH_RESULT_LAYER_NAME
 } = {}) {
   return prepareLayerInGroupScript({ groupName, layerName });
+}
+
+function hideLatestRetouchLayerScript({
+  groupName = RETOUCH_RESULT_GROUP_NAME
+} = {}) {
+  return `
+if (app.documents.length === 0) {
+  throw new Error('No active document');
+}
+var doc = app.activeDocument;
+var groupName = ${quoted(groupName)};
+
+function findLayerSet(parent, name) {
+  for (var i = 0; i < parent.layerSets.length; i++) {
+    if (parent.layerSets[i].name === name) return parent.layerSets[i];
+  }
+  return null;
+}
+
+var group = findLayerSet(doc, groupName);
+if (!group) {
+  throw new Error('没有找到局部返修组：' + groupName);
+}
+
+for (var i = 0; i < group.layers.length; i++) {
+  var layer = group.layers[i];
+  if (layer.visible) {
+    layer.visible = false;
+    return {
+      rolledBack: true,
+      groupName: groupName,
+      layerName: layer.name
+    };
+  }
+}
+
+throw new Error('没有可回退的局部返修图层。');
+`;
 }
 
 export function createPhotoshopTools({ appServer, mode = 'safe-auto', protectionReady = false } = {}) {
@@ -261,6 +322,13 @@ export function createPhotoshopTools({ appServer, mode = 'safe-auto', protection
       allowed('prepare_retouch_result_layer');
       return appServer.callMcpTool(PHOTOSHOP_SERVER, 'photoshop_execute_script', {
         code: prepareRetouchResultLayerScript(args)
+      });
+    },
+
+    async hideLatestRetouchLayer(args = {}) {
+      allowed('hide_latest_retouch_layer');
+      return appServer.callMcpTool(PHOTOSHOP_SERVER, 'photoshop_execute_script', {
+        code: hideLatestRetouchLayerScript(args)
       });
     },
 

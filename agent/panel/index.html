@@ -72,22 +72,37 @@
           <button id="product-close" class="button button-secondary" type="button">关闭</button>
         </div>
 
-        <div class="product-actions">
-          <button id="product-create-target" class="button button-primary" type="button">新建目标层</button>
-          <button id="product-read-target" class="button button-secondary" type="button">读取目标</button>
-          <button id="product-upload-trigger" class="button button-secondary" type="button">上传产品图</button>
-          <input id="product-reference-input" class="visually-hidden" type="file" accept="image/*" multiple>
+        <div class="product-module">
+          <div class="product-module-title">
+            <strong>目标识别</strong>
+            <span id="product-target-status">目标未锁定</span>
+          </div>
+          <div class="product-actions">
+            <button id="product-identify-target" class="button button-primary" type="button">识别当前产品</button>
+            <button id="product-create-target" class="button button-secondary" type="button">新建目标层</button>
+            <button id="product-read-target" class="button button-secondary" type="button">重新读取目标</button>
+            <button id="product-lock-target" class="button button-secondary" type="button">锁定目标</button>
+          </div>
         </div>
 
         <div class="product-rule-row">
-          <span>产品保真</span>
-          <span>画面融合</span>
+          <span>主产品图</span>
+          <span>多方位参考</span>
           <span>新图层</span>
+        </div>
+
+        <div class="product-module-title product-module-title-inline">
+          <strong>产品替换</strong>
+          <span>局部融合预览后再导入新图层</span>
+        </div>
+        <div class="product-actions">
+          <button id="product-upload-trigger" class="button button-secondary" type="button">上传主/参考图</button>
+          <input id="product-reference-input" class="visually-hidden" type="file" accept="image/*" multiple>
         </div>
 
         <div id="product-reference-empty" class="product-empty">
           <strong>等待产品参考图</strong>
-          <span>建议上传正面、侧面、细节等多方位图片。</span>
+          <span>上传后先设定主产品图，其余作为多方位参考图。</span>
         </div>
         <div id="product-reference-grid" class="product-reference-grid hidden"></div>
 
@@ -110,6 +125,7 @@
             <button id="product-create-retouch" class="button button-secondary" type="button">新建返修区</button>
             <button id="product-generate-retouch" class="button button-primary" type="button">生成局部返修</button>
             <button id="product-import-retouch" class="button button-secondary" type="button" disabled>导入返修层</button>
+            <button id="product-rollback-retouch" class="button button-secondary" type="button">回退上一版</button>
           </div>
           <div class="product-preview-frame">
             <img id="product-retouch-preview-image" alt="局部返修预览">
@@ -117,7 +133,7 @@
         </div>
 
         <div class="product-footer">
-          <button id="product-generate-preview" class="button button-primary" type="button">生成融合预览</button>
+          <button id="product-generate-preview" class="button button-primary" type="button">生成局部融合预览</button>
           <button id="product-import-preview" class="button button-secondary" type="button" disabled>导入画布</button>
         </div>
       </div>

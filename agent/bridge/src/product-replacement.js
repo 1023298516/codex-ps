@@ -138,22 +138,59 @@ function targetText(target) {
   return `目标区域边界为：${bounds.left}, ${bounds.top}, ${bounds.right}, ${bounds.bottom}。`;
 }
 
+function referenceName(reference) {
+  return reference?.name || basename(reference?.path || 'product-reference');
+}
+
+function productReferenceText(references = []) {
+  const mainReference = references.find(reference => reference.role === 'main') || references[0];
+  const supportReferences = references.filter(reference => reference !== mainReference);
+  return {
+    mainText: mainReference
+      ? `主产品图：${referenceName(mainReference)}。这张图是产品真实性的最高优先级依据。`
+      : '主产品图：未指定。请先在面板里设定一张主产品图。',
+    supportText: supportReferences.length
+      ? supportReferences.map((reference, index) => `${index + 1}. ${referenceName(reference)}`).join('\n')
+      : '暂无多方位参考图。'
+  };
+}
+
+export function buildProductIdentificationInput({
+  canvasPath
+} = {}) {
+  const prompt = [
+    '请识别当前 Photoshop 详情页里的产品。',
+    '',
+    '目标：找出需要被替换的旧产品候选目标，帮助用户人工确认。请重点寻找主商品、包装、瓶身、盒子、模特手持产品或详情页中心商品。',
+    '输出候选目标时，请用简短中文说明：候选目标编号、在画面中的大致方位、为什么认为它是产品、可能遗漏的区域。',
+    '注意：这一步只是候选目标识别，最后必须由人工确认。不要直接替换产品。',
+    '',
+    '输出要求：只输出识别建议和人工确认提醒。'
+  ].join('\n');
+
+  return [
+    { type: 'text', text: prompt },
+    ...(canvasPath ? [{ type: 'localImage', path: canvasPath }] : [])
+  ];
+}
+
 export function buildProductReplacementInput({
   canvasPath,
   target,
   references = []
 } = {}) {
-  const referenceList = references.map((reference, index) => `${index + 1}. ${reference.name || basename(reference.path)}`).join('\n');
+  const { mainText, supportText } = productReferenceText(references);
   const prompt = [
     '请使用 Codex 内置图片生成能力，生成一张 Photoshop 详情页产品替换融合预览图。',
     '',
     '核心原则：双向结合。产品保真，画面融合，二者都不能牺牲。',
+    mainText,
     '多方位产品图是产品身份锚点，用来防止幻觉。请严格参考产品外形、结构比例、材质、颜色、反光、文字和 LOGO，不要改形、改色、改材质、改 LOGO，也不要凭空添加不存在的细节。',
     '当前 Photoshop 画布是详情页风格依据。请让替换产品融入原详情页的风格和样式，匹配光影、透视、色调、阴影、清晰度、噪点和边缘过渡，不能像外部图片直接贴上去。',
     targetText(target),
     '',
-    '参考产品图：',
-    referenceList || '未上传参考图。',
+    '多方位参考图：',
+    supportText,
     '',
     '输出要求：只生成一张最终融合预览图，不要写说明文字。'
   ].join('\n');
@@ -170,18 +207,19 @@ export function buildProductRetouchInput({
   target,
   references = []
 } = {}) {
-  const referenceList = references.map((reference, index) => `${index + 1}. ${reference.name || basename(reference.path)}`).join('\n');
+  const { mainText, supportText } = productReferenceText(references);
   const prompt = [
     '请使用 Codex 内置图片生成能力，生成一张 Photoshop 局部返修预览图。',
     '',
     '核心原则：只处理返修区域，区域外保持当前画布一致。返修结果后续会作为新建返修图层导入 Photoshop，用于随时隐藏、删除或回退。',
     '不要覆盖原详情图，不要覆盖已有替换结果层，不要重绘整张详情页。只修复人工圈出的不满意部位，例如边缘、阴影、反光、透视、质感、色差或局部遮挡。',
+    mainText,
     '如果返修区域涉及产品本体，请继续以产品参考图为产品身份锚点，保持外形、结构比例、材质、颜色、文字和 LOGO，不要凭空改产品。',
     '同时要贴合当前详情页的风格、光影、透视、清晰度、噪点和边缘过渡。',
     targetText(target).replace('目标区域', '返修区域'),
     '',
-    '参考产品图：',
-    referenceList || '未上传参考图；请优先根据当前画布局部上下文进行自然返修。',
+    '多方位参考图：',
+    supportText,
     '',
     '输出要求：只生成一张局部返修预览图，不要写说明文字。'
   ].join('\n');

@@ -129,6 +129,17 @@ test('safe-auto prepares imported local retouch output as an independent retouch
   assert.match(appServer.calls[0].args.code, /返修 01/);
 });
 
+test('safe-auto hides the latest visible retouch layer for rollback', async () => {
+  const appServer = fakeAppServer();
+  const tools = createPhotoshopTools({ appServer, mode: 'safe-auto' });
+  await tools.hideLatestRetouchLayer();
+
+  assert.equal(appServer.calls[0].server, 'photoshop');
+  assert.equal(appServer.calls[0].tool, 'photoshop_execute_script');
+  assert.match(appServer.calls[0].args.code, /局部返修组/);
+  assert.match(appServer.calls[0].args.code, /visible = false/);
+});
+
 test('safe-auto blocks destructive actions', async () => {
   const tools = createPhotoshopTools({ appServer: fakeAppServer(), mode: 'safe-auto' });
   await assert.rejects(() => tools.deleteLayer({ layerId: 7 }), /delete_layer blocked in B safe-auto mode/);

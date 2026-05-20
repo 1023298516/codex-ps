@@ -25,6 +25,7 @@ test('safe-auto allows reads and safe layer creation/transforms', () => {
   assert.equal(canRunAction('safe-auto', 'create_retouch_target_layer').allowed, true);
   assert.equal(canRunAction('safe-auto', 'read_retouch_target_layer').allowed, true);
   assert.equal(canRunAction('safe-auto', 'prepare_retouch_result_layer').allowed, true);
+  assert.equal(canRunAction('safe-auto', 'hide_latest_retouch_layer').allowed, true);
 });
 
 test('safe-auto blocks destructive operations', () => {

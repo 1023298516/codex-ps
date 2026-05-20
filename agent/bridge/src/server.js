@@ -8,6 +8,7 @@ import { createPhotoshopTools } from './photoshop-tools.js';
 import { latestCodexImage, listCodexImages, readCodexImageFile, waitForLatestCodexImage } from './codex-images.js';
 import {
   DEFAULT_PRODUCT_REFERENCE_DIR,
+  buildProductIdentificationInput,
   buildProductReplacementInput,
   buildProductRetouchInput,
   listProductReferences,
@@ -129,6 +130,7 @@ export function createBridgeServer({
   const pendingProductRetouchPreviews = [];
   let latestProductReplacementPreview = null;
   let latestProductRetouchPreview = null;
+  let lockedProductTarget = null;
 
   function broadcast(event) {
     for (const res of sseClients) res.write(serializeSse(event));
@@ -223,18 +225,30 @@ export function createBridgeServer({
     return listProductReferences({ referenceDir: productReferenceDir });
   }
 
-  async function productReferencesForPaths(paths = []) {
+  async function productReferencesForPaths(paths = [], mainReferencePath = null) {
     const allReferences = await listProductReferenceImages();
     const selectedPaths = Array.isArray(paths) && paths.length > 0
       ? new Set(paths)
       : new Set(allReferences.map(reference => reference.path));
+    if (mainReferencePath) selectedPaths.add(mainReferencePath);
     const references = [];
     for (const reference of allReferences) {
       if (!selectedPaths.has(reference.path)) continue;
       await readProductReferenceFile({ referenceDir: productReferenceDir, filePath: reference.path });
       references.push(reference);
     }
-    return references;
+
+    if (references.length === 0) return [];
+    const mainPath = mainReferencePath && references.some(reference => reference.path === mainReferencePath)
+      ? mainReferencePath
+      : references[0].path;
+    return references
+      .map(reference => reference.path === mainPath ? { ...reference, role: 'main' } : reference)
+      .sort((a, b) => {
+        if (a.role === 'main') return -1;
+        if (b.role === 'main') return 1;
+        return 0;
+      });
   }
 
   async function importGalleryImages(paths = [], mode = 'safe-auto') {
@@ -275,8 +289,50 @@ export function createBridgeServer({
       broadcast(panelEvent('error', { message: shortenTechnicalText(textFromToolResult(result)), details: result }));
       return null;
     }
-    broadcast(panelEvent('assistant_delta', { text: '已读取目标图层：目标 01。后续会按这个区域生成替换融合预览。' }));
-    return targetFromToolResult(result);
+    const target = targetFromToolResult(result);
+    lockedProductTarget = null;
+    broadcast(panelEvent('assistant_delta', { text: '已读取目标图层：目标 01。确认无误后可以锁定目标。' }));
+    broadcast(panelEvent('product_target_state', { locked: false, target }));
+    return target;
+  }
+
+  async function identifyProductTarget(mode = 'safe-auto') {
+    const tools = createPhotoshopTools({ appServer, mode: normalizeMode(mode) });
+    const canvasPath = join(productReferenceDir, 'target-exports', `detail-page-target-${Date.now()}.png`);
+    await mkdir(dirname(canvasPath), { recursive: true });
+    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'export_canvas', status: 'started' }));
+    const exportResult = await tools.exportCanvasPng({ outputPath: canvasPath });
+    if (exportResult?.isError) {
+      broadcast(panelEvent('error', { message: shortenTechnicalText(textFromToolResult(exportResult)), details: exportResult }));
+      return;
+    }
+
+    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'create_product_target_layer', status: 'started' }));
+    const targetResult = await tools.createProductTargetLayer();
+    if (targetResult?.isError) {
+      broadcast(panelEvent('error', { message: shortenTechnicalText(textFromToolResult(targetResult)), details: targetResult }));
+      return;
+    }
+
+    lockedProductTarget = null;
+    broadcast(panelEvent('assistant_delta', { text: '已生成候选目标图层：圈选目标组 / 目标 01。Codex 会给出识别建议，请人工确认后锁定。' }));
+    broadcast(panelEvent('tool_event', { server: 'codex', tool: 'product_target_identification', status: 'started' }));
+    await appServer.startTurn(buildProductIdentificationInput({ canvasPath }));
+    if (appServer.threadId) await store?.update?.({ threadId: appServer.threadId });
+  }
+
+  async function lockProductTarget(mode = 'safe-auto') {
+    const tools = createPhotoshopTools({ appServer, mode: normalizeMode(mode) });
+    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'read_product_target_layer', status: 'started' }));
+    const result = await tools.readProductTargetLayer();
+    if (result?.isError) {
+      broadcast(panelEvent('error', { message: '没有找到可锁定的目标图层，请先新建或手动画出“目标 01”。', details: result }));
+      return null;
+    }
+    lockedProductTarget = targetFromToolResult(result);
+    broadcast(panelEvent('product_target_state', { locked: true, target: lockedProductTarget }));
+    broadcast(panelEvent('assistant_delta', { text: '目标已锁定：后续产品替换会按当前目标区域执行。' }));
+    return lockedProductTarget;
   }
 
   async function createRetouchTarget(mode = 'safe-auto') {
@@ -304,7 +360,7 @@ export function createBridgeServer({
 
   async function generateProductReplacementPreview(body = {}) {
     const mode = normalizeMode(body.mode);
-    const references = await productReferencesForPaths(body.referencePaths);
+    const references = await productReferencesForPaths(body.referencePaths, body.mainReferencePath);
     if (references.length === 0) {
       broadcast(panelEvent('error', { message: '请先上传至少 1 张产品参考图，建议上传 4-5 张多方位图片。' }));
       return;
@@ -320,10 +376,15 @@ export function createBridgeServer({
       return;
     }
 
-    const targetResult = await tools.readProductTargetLayer();
-    if (targetResult?.isError) {
-      broadcast(panelEvent('error', { message: '没有找到目标图层，请先新建或手动画出“目标 01”。', details: targetResult }));
-      return;
+    let target = lockedProductTarget;
+    if (!target) {
+      const targetResult = await tools.readProductTargetLayer();
+      if (targetResult?.isError) {
+        broadcast(panelEvent('error', { message: '没有找到目标图层，请先新建或手动画出“目标 01”。', details: targetResult }));
+        return;
+      }
+      target = targetFromToolResult(targetResult);
+      broadcast(panelEvent('assistant_delta', { text: '提示：当前目标还未锁定，本次会先按读取到的目标区域生成。' }));
     }
 
     const startedAtMs = Date.now();
@@ -331,7 +392,7 @@ export function createBridgeServer({
     broadcast(panelEvent('tool_event', { server: 'codex', tool: 'product_replacement_preview', status: 'started' }));
     await appServer.startTurn(buildProductReplacementInput({
       canvasPath,
-      target: targetFromToolResult(targetResult),
+      target,
       references
     }));
     if (appServer.threadId) await store?.update?.({ threadId: appServer.threadId });
@@ -377,7 +438,7 @@ export function createBridgeServer({
 
   async function generateProductRetouchPreview(body = {}) {
     const mode = normalizeMode(body.mode);
-    const references = await productReferencesForPaths(body.referencePaths);
+    const references = await productReferencesForPaths(body.referencePaths, body.mainReferencePath);
     const tools = createPhotoshopTools({ appServer, mode });
     const canvasPath = join(productReferenceDir, 'retouch-exports', `detail-page-current-${Date.now()}.png`);
     await mkdir(dirname(canvasPath), { recursive: true });
@@ -441,6 +502,17 @@ export function createBridgeServer({
     await tools.fitActiveLayerToDocument({ fillDocument: true });
     await tools.prepareRetouchResultLayer({ layerName: '返修 01' });
     broadcast(panelEvent('assistant_delta', { text: '已导入返修 01，新建在局部返修组里；原图和替换结果都没有被覆盖。' }));
+  }
+
+  async function rollbackProductRetouch(mode = 'safe-auto') {
+    const tools = createPhotoshopTools({ appServer, mode: normalizeMode(mode) });
+    broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'hide_latest_retouch_layer', status: 'started' }));
+    const result = await tools.hideLatestRetouchLayer();
+    if (result?.isError) {
+      broadcast(panelEvent('error', { message: shortenTechnicalText(textFromToolResult(result)), details: result }));
+      return;
+    }
+    broadcast(panelEvent('assistant_delta', { text: '已回退上一版局部返修：最新可见返修图层已隐藏，原图和替换结果仍保留。' }));
   }
 
   async function handlePanelChat(body) {
@@ -627,8 +699,18 @@ export function createBridgeServer({
           return;
         }
 
+        if (body.type === 'identify_product_target') {
+          await identifyProductTarget(body.mode);
+          return;
+        }
+
         if (body.type === 'read_product_target') {
           await readProductTarget(body.mode);
+          return;
+        }
+
+        if (body.type === 'lock_product_target') {
+          await lockProductTarget(body.mode);
           return;
         }
 
@@ -659,6 +741,11 @@ export function createBridgeServer({
 
         if (body.type === 'import_product_retouch_preview') {
           await importProductRetouchPreview(body);
+          return;
+        }
+
+        if (body.type === 'rollback_product_retouch') {
+          await rollbackProductRetouch(body.mode);
           return;
         }
 

@@ -571,6 +571,53 @@ test('WebSocket /socket creates and reads a Photoshop product target layer', asy
   }
 });
 
+test('WebSocket /socket identifies current products and locks the confirmed target', async () => {
+  const imageDir = await mkdtemp(join(tmpdir(), 'codex-ps-generated-'));
+  const referenceDir = await mkdtemp(join(tmpdir(), 'codex-ps-product-refs-'));
+  const turns = [];
+  const calls = [];
+  const server = createBridgeServer({
+    appServer: {
+      async startTurn(input) {
+        turns.push(input);
+        return { turn: { id: 'turn-1' } };
+      },
+      async callMcpTool(serverName, tool, args) {
+        calls.push({ server: serverName, tool, args });
+        if (tool === 'photoshop_export_canvas_png') {
+          await writeFile(args.outputPath, 'canvas', 'utf8');
+        }
+        return { content: [{ type: 'text', text: `${tool}: ok left: 10 top: 20 right: 210 bottom: 420` }] };
+      }
+    },
+    codexImageDir: imageDir,
+    productReferenceDir: referenceDir
+  });
+  const listener = await server.listen(0);
+  const socket = new WebSocket(`ws://127.0.0.1:${listener.address().port}/socket`);
+  try {
+    await waitForOpenSocket(socket);
+
+    socket.send(JSON.stringify({ type: 'identify_product_target', mode: 'safe-auto' }));
+    await waitForCondition(() => turns.length === 1);
+    assert.match(turns[0][0].text, /识别当前 Photoshop 详情页里的产品/);
+    assert.equal(turns[0].filter(item => item.type === 'localImage').length, 1);
+    assert.ok(calls.some(call => call.tool === 'photoshop_export_canvas_png'));
+    assert.ok(calls.some(call => /圈选目标组/.test(call.args?.code || '')));
+
+    const lockedPromise = waitForSocketEvent(socket, event => event.type === 'product_target_state' && event.locked === true);
+    socket.send(JSON.stringify({ type: 'lock_product_target', mode: 'safe-auto' }));
+    const locked = await lockedPromise;
+    assert.equal(locked.target.bounds.left, 10);
+    assert.equal(locked.target.bounds.bottom, 420);
+  } finally {
+    socket.close();
+    await server.close();
+    await rm(imageDir, { recursive: true, force: true });
+    await rm(referenceDir, { recursive: true, force: true });
+  }
+});
+
 test('WebSocket /socket generates a product replacement preview then imports it as a new result layer', async () => {
   const imageDir = await mkdtemp(join(tmpdir(), 'codex-ps-generated-'));
   const referenceDir = await mkdtemp(join(tmpdir(), 'codex-ps-product-refs-'));
@@ -608,10 +655,12 @@ test('WebSocket /socket generates a product replacement preview then imports it 
     socket.send(JSON.stringify({
       type: 'generate_product_replacement_preview',
       mode: 'safe-auto',
-      referencePaths: [reference.path]
+      referencePaths: [reference.path],
+      mainReferencePath: reference.path
     }));
     await waitForCondition(() => turns.length === 1);
     assert.match(turns[0][0].text, /双向结合/);
+    assert.match(turns[0][0].text, /主产品图：front\.png/);
     assert.equal(turns[0].filter(item => item.type === 'localImage').length, 2);
 
     const threadDir = join(imageDir, 'thread');
@@ -636,6 +685,7 @@ test('WebSocket /socket generates a product replacement preview then imports it 
       'photoshop_fit_layer_to_document',
       'photoshop_execute_script'
     ]);
+    assert.match(calls.at(-1).args.code, /替换结果组/);
   } finally {
     socket.close();
     await server.close();
@@ -684,7 +734,8 @@ test('WebSocket /socket generates a local retouch preview then imports it as a n
     socket.send(JSON.stringify({
       type: 'generate_product_retouch_preview',
       mode: 'safe-auto',
-      referencePaths: [reference.path]
+      referencePaths: [reference.path],
+      mainReferencePath: reference.path
     }));
     await waitForCondition(() => turns.length === 1);
     assert.match(turns[0][0].text, /局部返修/);
@@ -712,6 +763,11 @@ test('WebSocket /socket generates a local retouch preview then imports it as a n
       'photoshop_fit_layer_to_document',
       'photoshop_execute_script'
     ]);
+
+    const rollbackPromise = waitForSocketEvent(socket, event => event.type === 'assistant_delta' && /已回退上一版局部返修/.test(event.text || ''));
+    socket.send(JSON.stringify({ type: 'rollback_product_retouch', mode: 'safe-auto' }));
+    await rollbackPromise;
+    assert.ok(calls.some(call => /局部返修组/.test(call.args?.code || '') && /visible = false/.test(call.args.code)));
   } finally {
     socket.close();
     await server.close();
