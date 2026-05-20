@@ -640,6 +640,67 @@ test('WebSocket /socket identifies current products and locks the confirmed targ
   }
 });
 
+test('WebSocket /socket retries product target identification automatically when coordinates are missing', async () => {
+  const imageDir = await mkdtemp(join(tmpdir(), 'codex-ps-generated-'));
+  const referenceDir = await mkdtemp(join(tmpdir(), 'codex-ps-product-refs-'));
+  const turns = [];
+  const events = [];
+  const calls = [];
+  const server = createBridgeServer({
+    appServer: {
+      async startTurn(input) {
+        turns.push(input);
+        return { turn: { id: `turn-${turns.length}` } };
+      },
+      async callMcpTool(serverName, tool, args) {
+        calls.push({ server: serverName, tool, args });
+        if (tool === 'photoshop_export_canvas_png') {
+          await writeFile(args.outputPath, 'canvas', 'utf8');
+        }
+        return { content: [{ type: 'text', text: `${tool}: ok left: 40 top: 50 right: 240 bottom: 260` }] };
+      }
+    },
+    codexImageDir: imageDir,
+    productReferenceDir: referenceDir
+  });
+  const listener = await server.listen(0);
+  const socket = new WebSocket(`ws://127.0.0.1:${listener.address().port}/socket`);
+  socket.on('message', data => events.push(JSON.parse(data.toString('utf8'))));
+  try {
+    await waitForOpenSocket(socket);
+
+    socket.send(JSON.stringify({ type: 'identify_product_target', mode: 'safe-auto' }));
+    await waitForCondition(() => turns.length === 1);
+    server.handleAppServerNotification({
+      method: 'turn/output_text/delta',
+      params: { delta: '识别到了鞋子，但是没有坐标。' }
+    });
+    await server.handleAppServerNotification({ method: 'turn/completed', params: {} });
+
+    await waitForCondition(() => turns.length === 2);
+    assert.match(turns[1][0].text, /只输出严格 JSON/);
+    await waitForCondition(() => events.some(event => /自动重试/.test(event.message || event.text || '')));
+    assert.match(events.map(event => event.message || event.text || '').join('\n'), /自动重试/);
+    assert.doesNotMatch(events.map(event => event.message || event.text || '').join('\n'), /手动画|手动圈/);
+
+    const detectedPromise = waitForSocketEvent(socket, event => event.type === 'product_target_state' && event.locked === false);
+    server.handleAppServerNotification({
+      method: 'turn/output_text/delta',
+      params: { delta: '{"targets":[{"left":40,"top":50,"right":240,"bottom":260,"reason":"鞋子"}]}' }
+    });
+    await server.handleAppServerNotification({ method: 'turn/completed', params: {} });
+    await detectedPromise;
+
+    const targetScript = calls.find(call => /圈选目标组/.test(call.args?.code || ''))?.args?.code || '';
+    assert.match(targetScript, /"left":40/);
+  } finally {
+    socket.close();
+    await server.close();
+    await rm(imageDir, { recursive: true, force: true });
+    await rm(referenceDir, { recursive: true, force: true });
+  }
+});
+
 test('WebSocket /socket generates a product replacement preview then imports it as a new result layer', async () => {
   const imageDir = await mkdtemp(join(tmpdir(), 'codex-ps-generated-'));
   const referenceDir = await mkdtemp(join(tmpdir(), 'codex-ps-product-refs-'));

@@ -177,6 +177,20 @@ test('builds Codex target identification input for current Photoshop detail page
   ]);
 });
 
+test('builds strict JSON target identification retry input', () => {
+  const input = buildProductIdentificationInput({
+    canvasPath: '/tmp/detail-page.png',
+    strictJsonOnly: true
+  });
+
+  assert.match(input[0].text, /只输出严格 JSON/);
+  assert.match(input[0].text, /自动圈出/);
+  assert.doesNotMatch(input[0].text, /手动/);
+  assert.deepEqual(input.slice(1), [
+    { type: 'localImage', path: '/tmp/detail-page.png' }
+  ]);
+});
+
 test('parses product identification JSON targets from Codex output', () => {
   const targets = parseProductIdentificationTargets(`
 识别结果：

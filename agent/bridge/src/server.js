@@ -311,8 +311,8 @@ export function createBridgeServer({
     }
 
     lockedProductTarget = null;
-    pendingProductTargetIdentifications.push({ mode: normalizedMode, text: '' });
-    broadcast(panelEvent('assistant_delta', { text: '正在识别产品位置；识别完成后会按坐标生成候选目标图层，请人工确认后锁定。' }));
+    pendingProductTargetIdentifications.push({ mode: normalizedMode, text: '', canvasPath, attempt: 1 });
+    broadcast(panelEvent('assistant_delta', { text: '正在自动识别并圈出产品；识别完成后会按坐标生成候选目标图层，请确认后锁定。' }));
     broadcast(panelEvent('tool_event', { server: 'codex', tool: 'product_target_identification', status: 'started' }));
     await appServer.startTurn(buildProductIdentificationInput({ canvasPath }));
     if (appServer.threadId) await store?.update?.({ threadId: appServer.threadId });
@@ -321,8 +321,24 @@ export function createBridgeServer({
   async function finishProductTargetIdentification(request) {
     const targets = parseProductIdentificationTargets(request.text);
     if (targets.length === 0) {
-      broadcast(panelEvent('assistant_delta', {
-        text: 'Codex 已给出识别建议，但没有返回可靠坐标。请在 Photoshop 里手动画出目标图层后点击“确认目标”。'
+      if (request.attempt < 2) {
+        pendingProductTargetIdentifications.push({
+          mode: request.mode,
+          text: '',
+          canvasPath: request.canvasPath,
+          attempt: request.attempt + 1
+        });
+        broadcast(panelEvent('assistant_delta', { text: '第一轮没有拿到可靠坐标，正在自动重试更严格的产品识别。' }));
+        await appServer.startTurn(buildProductIdentificationInput({
+          canvasPath: request.canvasPath,
+          strictJsonOnly: true
+        }));
+        if (appServer.threadId) await store?.update?.({ threadId: appServer.threadId });
+        return;
+      }
+
+      broadcast(panelEvent('error', {
+        message: '自动识别没有拿到可靠坐标，未生成目标框。请重新点击“一键识别”，或换一张更清晰的当前画布后再试。'
       }));
       return;
     }
@@ -339,7 +355,7 @@ export function createBridgeServer({
     lockedProductTarget = null;
     broadcast(panelEvent('product_target_state', { locked: false, target }));
     broadcast(panelEvent('assistant_delta', {
-      text: `已按识别结果生成 ${targets.length} 个候选目标图层。请检查是否覆盖完整产品，必要时手动调整后点击“确认目标”。`
+      text: `已自动圈出 ${targets.length} 个候选目标。请检查是否覆盖完整产品，确认后点击“确认目标”。`
     }));
   }
 
@@ -348,7 +364,7 @@ export function createBridgeServer({
     broadcast(panelEvent('tool_event', { server: 'photoshop', tool: 'read_product_target_layer', status: 'started' }));
     const result = await tools.readProductTargetLayer();
     if (result?.isError) {
-      broadcast(panelEvent('error', { message: '没有找到可锁定的目标图层，请先新建或手动画出“目标 01”。', details: result }));
+      broadcast(panelEvent('error', { message: '没有找到可锁定的目标图层，请先点击“一键识别”自动生成目标。', details: result }));
       return null;
     }
     lockedProductTarget = targetFromToolResult(result);
@@ -419,7 +435,7 @@ export function createBridgeServer({
     if (!target) {
       const targetResult = await tools.readProductTargetLayer();
       if (targetResult?.isError) {
-        broadcast(panelEvent('error', { message: '没有找到目标图层，请先新建或手动画出“目标 01”。', details: targetResult }));
+        broadcast(panelEvent('error', { message: '没有找到目标图层，请先点击“一键识别”自动生成目标。', details: targetResult }));
         return;
       }
       target = targetFromToolResult(targetResult);
