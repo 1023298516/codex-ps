@@ -1,0 +1,208 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Codex PS</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="panel">
+      <div class="topbar">
+        <div class="brand">
+          <span class="brand-mark">Ps</span>
+          <div>
+            <strong>Codex PS</strong>
+            <span class="connection-line"><span class="status-dot"></span><span id="connection">Disconnected</span></span>
+          </div>
+        </div>
+        <button id="interrupt" class="button button-secondary" type="button">Stop</button>
+      </div>
+
+      <div class="mode-switch">
+        <button data-mode="safe-auto" class="segmented-button active" type="button">B 安全自动</button>
+        <button data-mode="full-auto" class="segmented-button" type="button">C 全自动</button>
+      </div>
+
+      <div class="primary-actions">
+        <div class="section-label">快捷操作</div>
+        <div class="quick-actions">
+          <button id="gallery-open" class="action-button action-primary" type="button">
+            <span class="action-icon">▦</span>
+            <span>图库</span>
+          </button>
+          <button id="product-replace-open" class="action-button" type="button">
+            <span class="action-icon">◎</span>
+            <span>产品替换</span>
+          </button>
+          <button id="import-latest" class="action-button" type="button">
+            <span class="action-icon">↧</span>
+            <span>导入最新</span>
+          </button>
+          <button id="read-canvas" class="action-button" type="button">
+            <span class="action-icon">◱</span>
+            <span>读画布</span>
+          </button>
+          <button id="read-layers" class="action-button" type="button">
+            <span class="action-icon">≡</span>
+            <span>读图层</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="log" class="log">
+        <div class="event status">面板已打开，正在连接 Codex bridge...</div>
+      </div>
+
+      <div id="composer" class="composer">
+        <textarea id="message" rows="3" placeholder="描述要生成、导入或修改的画面..."></textarea>
+        <div class="composer-footer">
+          <span>⌘ Enter 发送</span>
+          <button id="send" class="button button-primary" type="button">发送</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="product-modal" class="product-modal hidden" aria-hidden="true">
+      <div class="product-dialog">
+        <div class="product-header product-header-compact">
+          <div>
+            <strong>产品替换</strong>
+            <span id="product-reference-count">已上传 0 张参考图</span>
+          </div>
+          <button id="product-close" class="button button-secondary" type="button">关闭</button>
+        </div>
+
+        <div class="product-rule-row product-rule-row-compact">
+          <span>主产品图</span>
+          <span>多方位参考</span>
+          <span>新图层</span>
+        </div>
+
+        <div class="product-workflow">
+          <section class="product-step product-step-target">
+            <div class="product-step-head">
+              <span class="product-step-index">1</span>
+              <div>
+                <strong>目标识别</strong>
+                <span id="product-target-status">目标未锁定</span>
+              </div>
+            </div>
+            <div class="product-action-row">
+              <button id="product-identify-target" class="button button-primary" type="button">一键识别</button>
+              <button id="product-confirm-target" class="button button-secondary" type="button">确认目标</button>
+            </div>
+          </section>
+
+          <section class="product-step product-step-replace">
+            <div class="product-step-head">
+              <span class="product-step-index">2</span>
+              <div>
+                <strong>产品替换</strong>
+                <span>上传参考图，按圈选目标替换</span>
+              </div>
+            </div>
+            <div class="product-action-row product-upload-row">
+              <button id="product-upload-trigger" class="button button-secondary" type="button">上传主/参考图</button>
+              <input id="product-reference-input" class="visually-hidden" type="file" accept="image/*" multiple>
+            </div>
+
+            <div id="product-reference-empty" class="product-empty">
+              <strong>等待产品参考图</strong>
+              <span>上传后先设定主产品图，其余作为多方位参考图。</span>
+            </div>
+            <div id="product-reference-grid" class="product-reference-grid hidden"></div>
+          </section>
+
+          <section class="product-step product-step-preview">
+            <div class="product-step-head">
+              <span class="product-step-index">3</span>
+              <div>
+                <strong>融合预览</strong>
+                <span id="product-preview-status">未生成</span>
+              </div>
+            </div>
+            <div class="product-preview-frame">
+              <img id="product-preview-image" alt="产品替换融合预览">
+            </div>
+          </section>
+
+          <section class="product-step product-step-retouch">
+            <div class="product-step-head">
+              <span class="product-step-index">4</span>
+              <div>
+                <strong>局部返修</strong>
+                <span id="product-retouch-status">画选区后一键修改</span>
+              </div>
+            </div>
+            <div class="product-retouch-actions">
+              <button id="product-generate-retouch" class="button button-primary" type="button">一键修改</button>
+              <button id="product-rollback-retouch" class="button button-secondary" type="button">回退上一版</button>
+            </div>
+          </section>
+        </div>
+
+        <div class="product-footer product-footer-sticky">
+          <button id="product-generate-preview" class="button button-primary" type="button">一键替换</button>
+          <button id="product-import-preview" class="button button-secondary" type="button" disabled>导入画布</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="gallery-modal" class="gallery-modal hidden" aria-hidden="true">
+      <div class="gallery-dialog">
+        <div class="gallery-header">
+          <div>
+            <strong>图库</strong>
+            <span class="gallery-count-line"><span id="gallery-selected-count">已选择 0 张</span><span id="gallery-total-count"> · 共 0 张</span></span>
+          </div>
+          <div class="gallery-header-actions">
+            <button id="gallery-refresh" class="button button-secondary" type="button">刷新</button>
+            <button id="gallery-close" class="button button-secondary" type="button">关闭</button>
+          </div>
+        </div>
+
+        <div class="gallery-toolbar">
+          <span>最近生成</span>
+          <span>可多选</span>
+          <span>智能对象</span>
+        </div>
+
+        <div id="gallery-empty" class="gallery-empty hidden">
+          <strong>还没有可导入的图片</strong>
+          <span>先在面板里生成图片，Codex 生成后的图片会自动出现在这里。</span>
+        </div>
+
+        <div id="gallery-grid" class="gallery-grid"></div>
+
+        <div class="gallery-footer">
+          <button id="gallery-clear-selection" class="button button-secondary" type="button">取消选择</button>
+          <button id="gallery-import-selected" class="button button-primary" type="button">导入选中</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="preview-modal" class="preview-modal hidden" aria-hidden="true">
+      <div class="preview-dialog">
+        <div class="preview-header">
+          <div>
+            <strong id="preview-title">预览图片</strong>
+            <span id="preview-meta">确认后导入 Photoshop 画布</span>
+          </div>
+          <button id="preview-close" class="button button-secondary" type="button">关闭</button>
+        </div>
+        <div class="preview-frame">
+          <img id="preview-image" alt="Codex generated preview">
+        </div>
+        <div class="preview-note">
+          <strong>智能对象</strong>
+          <span>保留可编辑图层，适合后续修图。</span>
+        </div>
+        <div class="preview-footer">
+          <button id="preview-cancel" class="button button-secondary" type="button">留在图库</button>
+          <button id="preview-import" class="button button-primary" type="button">导入画布</button>
+        </div>
+      </div>
+    </div>
+    <script src="./panel.js"></script>
+  </body>
+</html>

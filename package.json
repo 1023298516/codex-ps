@@ -1,0 +1,20 @@
+{
+  "name": "codex-ps",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"agent/**/*.test.js\"",
+    "test:bridge": "node --test \"agent/bridge/test/*.test.js\"",
+    "test:panel": "node --test \"agent/panel/test/*.test.js\"",
+    "dev:bridge": "node agent/bridge/src/index.js",
+    "dev:agent": "node agent/scripts/start-dev.mjs",
+    "check": "npm run test"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "ws": "^8.20.1"
+  }
+}
