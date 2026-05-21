@@ -117,6 +117,8 @@ test('builds Codex image-generation input with anti-hallucination and style-fusi
   });
 
   assert.equal(input[0].type, 'text');
+  assert.match(input[0].text, /Codex 生图技能/);
+  assert.doesNotMatch(input[0].text, /内置图片生成能力/);
   assert.match(input[0].text, /双向结合/);
   assert.match(input[0].text, /按圈选目标替换/);
   assert.doesNotMatch(input[0].text, /单一替换|多方位替换/);
@@ -151,6 +153,8 @@ test('builds Codex product replacement input for multi-orientation circled targe
   });
 
   assert.equal(input[0].type, 'text');
+  assert.match(input[0].text, /Codex 生图技能/);
+  assert.doesNotMatch(input[0].text, /内置图片生成能力/);
   assert.match(input[0].text, /按圈选目标替换/);
   assert.doesNotMatch(input[0].text, /单一替换|多方位替换/);
   assert.match(input[0].text, /圈出的目标/);
@@ -236,6 +240,8 @@ test('builds Codex local retouch input for direct new-layer generation from Phot
   });
 
   assert.equal(input[0].type, 'text');
+  assert.match(input[0].text, /Codex 生图技能/);
+  assert.doesNotMatch(input[0].text, /内置图片生成能力/);
   assert.match(input[0].text, /局部返修/);
   assert.match(input[0].text, /Photoshop 当前选区/);
   assert.match(input[0].text, /只处理返修区域/);

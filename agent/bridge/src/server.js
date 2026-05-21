@@ -139,7 +139,7 @@ function directIntentForMessage(message = '') {
 
 function codexImageGenerationPrompt(prompt) {
   return [
-    '请使用 Codex 内置图片生成能力生成一张图片。',
+    '请使用 Codex 生图技能生成一张图片。',
     `图片需求：${prompt}`,
     '只生成图片，不要调用 Photoshop MCP，也不要调用 OpenAI API Key。'
   ].join('\n');

@@ -214,7 +214,7 @@ test('POST /chat routes image generation requests to Codex built-in image genera
     });
     assert.equal(response.status, 200);
     assert.equal(turns.length, 1);
-    assert.match(turns[0], /内置图片生成能力/);
+    assert.match(turns[0], /生图技能/);
     assert.match(turns[0], /生成一只猪/);
     assert.deepEqual(mcpCalls, []);
   } finally {

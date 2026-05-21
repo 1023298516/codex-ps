@@ -266,7 +266,7 @@ export function buildProductReplacementInput({
 } = {}) {
   const { mainText, supportText } = productReferenceText(references);
   const prompt = [
-    '请使用 Codex 内置图片生成能力，生成一张 Photoshop 详情页产品替换融合预览图。',
+    '请使用 Codex 生图技能，生成一张 Photoshop 详情页产品替换融合预览图。',
     '',
     '核心原则：双向结合。产品保真，画面融合，二者都不能牺牲。',
     '按圈选目标替换：以 Photoshop 里读取到的目标图层为准。读取到 1 个圈出的目标就替换 1 个；读取到多个圈出的目标就逐个替换所有目标。',
@@ -297,7 +297,7 @@ export function buildProductRetouchInput({
 } = {}) {
   const { mainText, supportText } = productReferenceText(references);
   const prompt = [
-    '请使用 Codex 内置图片生成能力，生成一张 Photoshop 局部返修结果图。',
+    '请使用 Codex 生图技能，生成一张 Photoshop 局部返修结果图。',
     '',
     '核心原则：使用 Photoshop 当前选区作为返修区域，只处理返修区域，区域外保持当前画布一致。生成完成后会直接导入为新建返修图层，用于随时隐藏、删除或回退。',
     '不要覆盖原详情图，不要覆盖已有替换结果层，不要重绘整张详情页。只修复人工在画布里选中的不满意部位，例如边缘、阴影、反光、透视、质感、色差或局部遮挡。',
